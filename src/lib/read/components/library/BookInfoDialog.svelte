@@ -2,10 +2,10 @@
 	// Per-book status/diagnostics: metadata, identity, sync state, and a live
 	// Blossom availability probe (HEAD <server>/<sha256>, no auth per BUD-01)
 	// so "why can't I restore this?" is answerable without the console.
-	// PORT NOTE: the "Find readers" entry returns with browse in Phase 6.
 	import { CheckCircle2, CloudDownload, CloudUpload, Copy, Loader2, RefreshCw, X, XCircle } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { db } from '$lib/db/index.js';
+	import { browse } from '$lib/read/stores/browse.svelte.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { sync } from '$lib/read/stores/sync.svelte.js';
@@ -56,6 +56,15 @@
 				}
 			})
 		);
+	}
+
+	/** Jump to the browse view's readers-of-this-book query. */
+	function findReaders(): void {
+		if (!book) return;
+		const { sha256: sha, title } = book;
+		ui.infoSha = null;
+		ui.view = 'browse';
+		void browse.findReaders(sha, title);
 	}
 
 	/** Public shelf: republish the 30101 plaintext (shared) or encrypted
@@ -211,6 +220,14 @@
 					<span class={book.shared ? 'text-emerald-500' : 'text-muted-foreground'}>
 						{book.shared ? 'On your public shelf' : 'Private (default)'}
 					</span>
+					<button
+						data-testid="find-readers"
+						class="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/70"
+						title="Who else shared annotations on this book?"
+						onclick={() => void findReaders()}
+					>
+						Find readers
+					</button>
 					<button
 						data-testid="book-share-toggle"
 						class="rounded-lg px-2.5 py-1 text-xs font-medium {book.shared

@@ -10,8 +10,11 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import SettingsPanel from '$lib/read/components/SettingsPanel.svelte';
+	import BrowseView from '$lib/read/components/browse/BrowseView.svelte';
+	import GhostView from '$lib/read/components/library/GhostView.svelte';
 	import LibraryView from '$lib/read/components/library/LibraryView.svelte';
 	import ReaderView from '$lib/read/components/reader/ReaderView.svelte';
+	import { browse } from '$lib/read/stores/browse.svelte.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
 	import { reader } from '$lib/read/stores/reader.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
@@ -34,13 +37,17 @@
 		handledInitialUrl = true;
 		const sha = page.url.searchParams.get('book');
 		if (sha) void library.open(sha);
+		else if (page.url.searchParams.get('view') === 'browse') {
+			browse.open();
+			ui.view = 'browse';
+		}
 	});
 
-	// Mirror the open book back into the URL (reload-safe, shareable).
+	// Mirror the open book (or browse view) back into the URL.
 	$effect(() => {
 		if (!handledInitialUrl) return;
 		const sha = ui.view === 'reader' ? reader.book?.sha256 : undefined;
-		const target = sha ? `?book=${sha}` : '';
+		const target = sha ? `?book=${sha}` : ui.view === 'browse' ? '?view=browse' : '';
 		if (window.location.search !== target) {
 			replaceState(`${resolve('/read')}${target}`, {});
 		}
@@ -60,24 +67,9 @@
 {:else if ui.view === 'reader'}
 	<ReaderView />
 {:else if ui.view === 'ghost' && ui.ghostSha}
-	<!-- PORT NOTE (Phase 2): the full read-only GhostView arrives in Phase 6;
-	     file restore arrives with sync in Phase 5. -->
-	<div class="mx-auto flex max-w-md flex-col items-center px-4 py-24 text-center">
-		<h2 class="text-lg font-semibold">Not on this device</h2>
-		<p class="mt-2 text-sm text-muted-foreground">
-			This book's metadata is here, but its file isn't. Restoring from a Blossom backup arrives
-			with sync.
-		</p>
-		<button
-			class="mt-6 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-			onclick={() => {
-				ui.ghostSha = null;
-				ui.view = 'library';
-			}}
-		>
-			Back to library
-		</button>
-	</div>
+	<GhostView sha256={ui.ghostSha} />
+{:else if ui.view === 'browse'}
+	<BrowseView />
 {:else}
 	<LibraryView />
 {/if}

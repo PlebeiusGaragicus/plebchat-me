@@ -5,6 +5,7 @@
 
 import { registerSessionHooks } from '$lib/session/index.svelte';
 import { offerVibereaderMigration } from './migrate.js';
+import { browse } from './stores/browse.svelte.js';
 import { library } from './stores/library.svelte.js';
 import { reader } from './stores/reader.svelte.js';
 import { sync } from './stores/sync.svelte.js';
@@ -20,6 +21,7 @@ registerSessionHooks({
 		if (reader.book) reader.close();
 		library.reset();
 		sync.reset();
+		browse.reset();
 		ui.reset();
 	}
 });

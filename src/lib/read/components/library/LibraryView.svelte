@@ -1,6 +1,6 @@
 <script lang="ts">
-	// PORT NOTE: Browse joins this toolbar in Phase 6.
-	import { BookOpen, RefreshCw, Settings } from '@lucide/svelte';
+	import { BookOpen, RefreshCw, Settings, Users } from '@lucide/svelte';
+	import { browse } from '$lib/read/stores/browse.svelte.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
 	import { sync } from '$lib/read/stores/sync.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
@@ -33,6 +33,17 @@
 		<h2 class="text-xl font-semibold">Library</h2>
 		<div class="flex items-center gap-2">
 			<ImportButton />
+			<button
+				data-testid="browse-button"
+				class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+				title="Browse other libraries"
+				onclick={() => {
+					browse.open();
+					ui.view = 'browse';
+				}}
+			>
+				<Users class="size-4" />
+			</button>
 			<button
 				data-testid="sync-button"
 				class="relative rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"

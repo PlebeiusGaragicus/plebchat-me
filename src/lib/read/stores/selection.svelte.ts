@@ -1,0 +1,41 @@
+// The active text selection inside the book (feeds the context menu), plus
+// the "editing an existing annotation" popover state from mark clicks.
+
+import type { SelectionInfo } from '$lib/read/epub/service.js';
+
+let active = $state<SelectionInfo | null>(null);
+let editingId = $state<string | null>(null);
+let editingRect = $state<DOMRect | null>(null);
+
+export const selection = {
+	get active() {
+		return active;
+	},
+	get editingId() {
+		return editingId;
+	},
+	get editingRect() {
+		return editingRect;
+	},
+	set(sel: SelectionInfo) {
+		editingId = null;
+		editingRect = null;
+		active = sel;
+	},
+	edit(id: string, rect: DOMRect | null) {
+		active = null;
+		editingId = id;
+		editingRect = rect;
+	},
+	/** Page turns clear the text selection but keep an open annotation editor
+	 * (navigating TO an annotation relocates — killing the editor would make
+	 * the sidebar's edit flow impossible). */
+	clearActive() {
+		active = null;
+	},
+	clear() {
+		active = null;
+		editingId = null;
+		editingRect = null;
+	}
+};

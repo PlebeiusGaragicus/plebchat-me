@@ -62,6 +62,18 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - **CI/Pages**: vibereader `.github/workflows/ci.yml` (check + build + `mkdocs build --strict`) and `deploy.yml` (recursive submodule checkout for cyphertap, `BASE_PATH`, upload-pages-artifact).
 - **Playwright e2e**: SvelteReader `frontend/playwright.config.ts` (chromium, dev-server webServer, trace/screenshot on failure) + `frontend/e2e/*.test.ts`; minimal variant in `vibereader/cyphertap/playwright.config.ts` (preview-server based).
 
+## Read-mode gotchas (inherited from vibereader — hard-won, do not relearn)
+
+- **epub.js MUST be fed an ArrayBuffer**, never a URL (it 404s fetching internal archive paths). Blob from IndexedDB → `arrayBuffer()` → `ePub(buffer)`.
+- **Add annotations to the rendition only AFTER the first `rendered` event** — earlier crashes epub.js (`stepsToXpath`). The gate lives in `annotations.applyToRendition()`.
+- **Never sort CFIs lexically**; use `epub.compareCfi` (`new EpubCFI().compare`).
+- Live epub.js `Book`/`Rendition` objects are **plain module state in `src/lib/read/epub/service.ts`, never `$state`** — runes proxies break them. That file is the ONLY epub.js contact; keep it swappable (the foliate-js migration rewrites exactly it).
+- ONE canonical camelCase data shape everywhere (`src/lib/db/types.ts` mirrors the nostr event content 1:1).
+- `epubjs` is CJS — it lives in `optimizeDeps.include`; extend that list if dev-mode mid-mount reloads reappear.
+- Blob stores (`bookFiles`, `covers`) use **raw put** — the JSON `clone()` used for `$state`-stripping destroys Blobs.
+- Reading theme (light/dark/sepia inside the book iframe, `rendition.themes`) is independent of app chrome theme (mode-watcher). Don't couple them.
+- The `?book=` deep-link mirror in `/read/+page.svelte` must stay gated on `handledInitialUrl` — the mount-time mirror otherwise erases the param before it's read.
+
 ## Working agreements
 
 - **Feature proposals**: maintain thorough plan documents at `docs/proposals/<feature-plan-slug>.md` so features can be considered, designed, reviewed, and tweaked before implementation. Update each proposal as it's built out — they track progress across chat sessions.

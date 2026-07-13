@@ -3,12 +3,15 @@ packages:
   - cyphertap
 
 allowBuilds:
+  # pi-ai transitives — postinstall not needed for a browser bundle
+  '@google/genai': false
   '@parcel/watcher': true
   '@tailwindcss/oxide': true
   # epubjs transitives — postinstall scripts are banners only, nothing to build
   core-js: false
   es5-ext: false
   esbuild: true
+  protobufjs: false
   sharp: true
 
 # Keep identical to cyphertap/pnpm-workspace.yaml — ndk-cache-dexie and

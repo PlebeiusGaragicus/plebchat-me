@@ -82,6 +82,16 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - Multi-tab is out of scope for v1: two tabs on one DB can clobber progress/annotations last-write-wins.
 - Toasts live bottom-right: top-right stacks sit exactly over mode toolbars and intercept clicks while visible (found via the sync gate — sonner also pauses dismiss timers in backgrounded tabs).
 
+## Search-mode / agent-runtime gotchas
+
+- The pi agent runtime (`@earendil-works/pi-agent-core` + `pi-ai`, pinned 0.80.6) lives **mode-agnostic in `$lib/ai/`** (model builder, `AgentRunner` reactive mirror, tool helpers, pruning, transcript sanitize) — Synthesize/Debate consume it as-is; Search-specific code stays in `$lib/search/`. Runner rebuilds model + system prompt + tools at the top of every `send()` so settings changes and tool gates apply per run.
+- **Never write `$state` inside a code path reachable from `$derived`** — `runnerFor()` is called from the UI's `$derived(searchThreads.activeRunner)`, so it lazily fills a plain (non-reactive) Map and must not touch reactive state (`state_unsafe_mutation` otherwise). Constructing an AgentRunner (fresh `$state`) inside a derived is fine.
+- pi-ai's `openai-completions` transport drives the OpenAI SDK with **`stream: true` always** — e2e mocks must answer `**/chat/completions` with SSE `chat.completion.chunk` frames (see `e2e/search.test.ts`), not plain JSON.
+- `runner.toolRuns` is runtime-only; rehydrated transcripts rebuild it from assistant `toolCall` blocks + `toolResult` messages, else historical tool cards vanish after reload.
+- Firecrawl (`api.firecrawl.dev`) serves `access-control-allow-origin: *` (verified 2026-07-13) — browser-direct with the user's key, no proxy. Sources are recorded by tool execution (authoritative), never parsed from model prose; `[sN]` markers are presentation.
+- `nostr_search` is a self-contained raw-WS one-shot NIP-50 REQ (default `wss://relay.nostr.band`) — deliberately not via cyphertap/NDK (pool has no search relay). Timeout resolves with partial results instead of failing the tool.
+- Search threads (verbatim pi `AgentMessage[]`) are device-local in `searchThreads` (DB v2), matching Read's chat-thread stance: transcripts stay outside the sync schema.
+
 ## Working agreements
 
 - **Feature proposals**: maintain thorough plan documents at `docs/proposals/<feature-plan-slug>.md` so features can be considered, designed, reviewed, and tweaked before implementation. Update each proposal as it's built out — they track progress across chat sessions.

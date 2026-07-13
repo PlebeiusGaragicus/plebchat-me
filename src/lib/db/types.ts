@@ -91,6 +91,37 @@ export interface ChatMessage {
 	createdAt: number;
 }
 
+/**
+ * A source the Search agent consulted, recorded by tool execution (never by
+ * the model's prose — the tool-built list is the authoritative record; `[s1]`
+ * markers in the answer are presentation only).
+ */
+export interface SearchSource {
+	id: string; // `s1`, `s2`, … — stable within the thread, cited as [s1]
+	kind: 'web' | 'nostr';
+	title: string;
+	/** Web URL, or a nostr: URI for relay results. */
+	url: string;
+	description?: string;
+	/** How the agent touched it: surfaced by search, or fully fetched. */
+	fetched?: boolean;
+	addedAt: number;
+}
+
+/**
+ * Device-local research thread (Search mode). `messages` is the verbatim pi
+ * AgentMessage transcript — persisted as-is so a thread rehydrates into the
+ * agent runner; deliberately outside the sync schema like ChatThread.
+ */
+export interface SearchThread {
+	id: string; // `search-<nanoid>`
+	title: string;
+	messages: unknown[];
+	sources: SearchSource[];
+	createdAt: number;
+	updatedAt: number;
+}
+
 /** Device-local chat thread (deliberately not part of the sync schema). */
 export interface ChatThread {
 	id: string;

@@ -24,15 +24,28 @@ export interface ReadingSettings {
 	theme: ReadingTheme;
 }
 
+/** Wire protocol the BYO endpoint speaks — pi-ai dispatches on this. */
+export type AiApiFlavor = 'openai-completions' | 'anthropic-messages';
+
 export interface AiSettings {
 	baseUrl: string;
 	apiKey: string;
 	model: string;
 	streaming: boolean;
+	api: AiApiFlavor;
+}
+
+/** Search-mode tool credentials — like the AI config, this browser only. */
+export interface SearchSettings {
+	/** Gates the web_search/fetch_page tools; absent key = nostr_search only. */
+	firecrawlApiKey: string;
+	/** NIP-50 search relay queried by the nostr_search tool. */
+	searchRelay: string;
 }
 
 export interface Settings {
 	ai: AiSettings;
+	search: SearchSettings;
 	reading: ReadingSettings;
 	/** When `reading` last changed — drives the 30103 sync merge. */
 	readingUpdatedAt: number;
@@ -47,7 +60,15 @@ function envDefaults(): Settings {
 			baseUrl: import.meta.env.VITE_AI_BASE_URL ?? '',
 			apiKey: import.meta.env.VITE_AI_API_KEY ?? '',
 			model: import.meta.env.VITE_AI_MODEL ?? '',
-			streaming: true
+			streaming: true,
+			api:
+				import.meta.env.VITE_AI_API === 'anthropic-messages'
+					? 'anthropic-messages'
+					: 'openai-completions'
+		},
+		search: {
+			firecrawlApiKey: import.meta.env.VITE_FIRECRAWL_API_KEY ?? '',
+			searchRelay: 'wss://relay.nostr.band'
 		},
 		reading: { fontSize: 18, fontFamily: '', lineHeight: 1.6, theme: 'light' },
 		readingUpdatedAt: 0,
@@ -64,6 +85,7 @@ function load(): Settings {
 		const saved = JSON.parse(raw) as Partial<Settings>;
 		return {
 			ai: { ...defaults.ai, ...saved.ai },
+			search: { ...defaults.search, ...saved.search },
 			reading: { ...defaults.reading, ...saved.reading },
 			readingUpdatedAt: saved.readingUpdatedAt ?? 0,
 			relays: saved.relays?.length ? saved.relays : defaults.relays,
@@ -80,6 +102,7 @@ const isAiConfigured = $derived(Boolean(current.ai.baseUrl && current.ai.model))
 
 function save(patch: Partial<Settings>): void {
 	if (patch.ai) current.ai = { ...current.ai, ...patch.ai };
+	if (patch.search) current.search = { ...current.search, ...patch.search };
 	if (patch.reading) {
 		current.reading = { ...current.reading, ...patch.reading };
 		current.readingUpdatedAt = Date.now();

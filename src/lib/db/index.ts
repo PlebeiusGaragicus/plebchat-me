@@ -22,11 +22,12 @@ import type {
 	Cover,
 	LocationsCache,
 	ReadingProgress,
+	SearchThread,
 	Tombstone
 } from './types.js';
 
 const DB_PREFIX = 'plebchat';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface PlebChatDB extends DBSchema {
 	books: {
@@ -59,6 +60,11 @@ interface PlebChatDB extends DBSchema {
 		key: string;
 		value: ChatThread;
 		indexes: { 'by-book': string; 'by-updated': number };
+	};
+	searchThreads: {
+		key: string; // search-<nanoid>
+		value: SearchThread;
+		indexes: { 'by-updated': number };
 	};
 	kv: {
 		key: string;
@@ -129,6 +135,11 @@ function getDB(): Promise<IDBPDatabase<PlebChatDB>> {
 
 					db.createObjectStore('kv', { keyPath: 'key' });
 					db.createObjectStore('tombstones', { keyPath: 'key' });
+				}
+				if (oldVersion < 2) {
+					// v2: Search mode research threads (device-local pi transcripts).
+					const searchThreads = db.createObjectStore('searchThreads', { keyPath: 'id' });
+					searchThreads.createIndex('by-updated', 'updatedAt');
 				}
 			}
 		});
@@ -292,6 +303,20 @@ async function deleteChat(id: string): Promise<void> {
 	await (await getDB()).delete('chats', id);
 }
 
+// ---- search threads ----
+
+async function getAllSearchThreads(): Promise<SearchThread[]> {
+	return (await getDB()).getAll('searchThreads');
+}
+
+async function saveSearchThread(thread: SearchThread): Promise<void> {
+	await (await getDB()).put('searchThreads', clone(thread));
+}
+
+async function deleteSearchThread(id: string): Promise<void> {
+	await (await getDB()).delete('searchThreads', id);
+}
+
 // ---- kv ----
 
 async function getKV<T>(key: string): Promise<T | undefined> {
@@ -338,6 +363,11 @@ export const db = {
 		getByBook: getBookChats,
 		save: saveChat,
 		delete: deleteChat
+	},
+	searchThreads: {
+		getAll: getAllSearchThreads,
+		save: saveSearchThread,
+		delete: deleteSearchThread
 	},
 	kv: {
 		get: getKV,

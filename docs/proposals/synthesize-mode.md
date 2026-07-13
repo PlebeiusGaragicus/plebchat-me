@@ -47,7 +47,7 @@ Synthesize is where the other modes converge: sources from Search, annotations f
 ## Progress
 
 - [x] Shared workspace core decision (with Debate) — yes, `$lib/workspace/`
-- [ ] Phase 1: IndexedDB schema + projects store + dashboard
+- [x] Phase 1: IndexedDB schema (DB v3) + projects store + dashboard + `?project=` deep links
 - [ ] Phase 2: WorkspaceLayout port (sidebar + tabbed panes, mobile drawer)
 - [ ] Phase 3: CodeMirror editor with live preview + `[[links]]` + versions
 - [ ] Phase 4: Agent integration (file tools with approval gate)

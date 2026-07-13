@@ -122,6 +122,125 @@ export interface SearchThread {
 	updatedAt: number;
 }
 
+// ---- Workspace (the Synthesize/Debate shared core, $lib/workspace) ----
+// Shapes adopted from socratic-seminar's db/types.ts (itself SvelteReader's
+// synthesize model with the LangGraph fields stripped). Local-first; nostr
+// sync is deferred to the shared event-kind decision with Debate mode.
+
+export interface ProjectTag {
+	name: string;
+	color: string; // tailwind class, e.g. 'bg-red-500'
+	deletable: boolean;
+}
+
+export interface Project {
+	id: string; // `proj-<nanoid>`
+	title: string;
+	tags: ProjectTag[];
+	createdAt: number;
+	updatedAt: number;
+}
+
+/** Per-thread agent configuration (BYO endpoint settings live in localStorage). */
+export interface AgentSettings {
+	/** Overrides the global model id from settings when set. */
+	model?: string;
+}
+
+/** A workspace chat thread (its pi transcript lives in TranscriptRecord). */
+export interface WorkspaceThread {
+	id: string; // `wsthread-<nanoid>`
+	projectId: string;
+	title: string;
+	/** Preview line for lists — last message excerpt or summary. */
+	description?: string;
+	agentSettings?: AgentSettings;
+	createdAt: number;
+	updatedAt: number;
+}
+
+/**
+ * One record per workspace thread: the pi agent transcript stored verbatim
+ * (`AgentMessage[]` round-trips through the runner — never project it into a
+ * lossy custom shape). Split from WorkspaceThread so lists never load
+ * transcripts.
+ */
+export interface TranscriptRecord {
+	threadId: string;
+	projectId: string;
+	messages: unknown[];
+	updatedAt: number;
+}
+
+export interface ArtifactVersion {
+	index: number;
+	title: string;
+	content: string; // markdown
+	createdAt: number;
+}
+
+/** A versioned markdown document; the agent edits these via patch_file. */
+export interface Artifact {
+	id: string; // `artifact-<nanoid>`
+	projectId: string;
+	/** Points into versions[]; the current version holds the live title/content. */
+	currentVersionIndex: number;
+	versions: ArtifactVersion[];
+	tags?: string[];
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface Bibliography {
+	author?: string;
+	publishedDate?: string; // ISO date
+	publisher?: string;
+	resourceType?: string; // e.g. 'Article'
+}
+
+/**
+ * A saved reference document (web page scraped to markdown; file uploads are
+ * a deferred follow-up). Read-only in the UI; the agent cites sources by
+ * title. Distinct from SearchSource, which is a lightweight citation record
+ * inside a Search thread — this carries the full content.
+ */
+export interface Source {
+	id: string; // `source-<nanoid>`
+	projectId: string;
+	title: string;
+	url: string;
+	content: string; // markdown
+	bibliography?: Bibliography;
+	provider?: 'firecrawl' | 'manual';
+	scrapedAt?: number;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export type TabType = 'artifact' | 'thread' | 'source';
+
+export interface TabItem {
+	id: string;
+	type: TabType;
+}
+
+/** Per-project pane/tab arrangement — kv key `workspace-state:<projectId>`. */
+export interface WorkspaceState {
+	leftTabs: TabItem[];
+	rightTabs: TabItem[];
+	activeLeftTabId: string | null;
+	activeRightTabId: string | null;
+	rightPanelCollapsed: boolean;
+}
+
+/** Global (per-npub, not per-project) workspace layout — kv key `workspace-layout`. */
+export interface LayoutState {
+	sidebarWidth: number;
+	sidebarCollapsed: boolean;
+	/** Left column fraction of the two-panel split (0.2–0.8). */
+	splitRatio: number;
+}
+
 /** Device-local chat thread (deliberately not part of the sync schema). */
 export interface ChatThread {
 	id: string;

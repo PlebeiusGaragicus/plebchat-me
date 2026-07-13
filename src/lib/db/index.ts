@@ -16,18 +16,23 @@ import { openDB, deleteDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { KIND_ANNOTATION, KIND_BOOK, KIND_PROGRESS } from '$lib/read/nostr/kinds.js';
 import type {
 	Annotation,
+	Artifact,
 	Book,
 	BookFile,
 	ChatThread,
 	Cover,
 	LocationsCache,
+	Project,
 	ReadingProgress,
 	SearchThread,
-	Tombstone
+	Source,
+	Tombstone,
+	TranscriptRecord,
+	WorkspaceThread
 } from './types.js';
 
 const DB_PREFIX = 'plebchat';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 interface PlebChatDB extends DBSchema {
 	books: {
@@ -65,6 +70,31 @@ interface PlebChatDB extends DBSchema {
 		key: string; // search-<nanoid>
 		value: SearchThread;
 		indexes: { 'by-updated': number };
+	};
+	projects: {
+		key: string; // proj-<nanoid>
+		value: Project;
+		indexes: { 'by-updated': number };
+	};
+	workspaceThreads: {
+		key: string; // wsthread-<nanoid>
+		value: WorkspaceThread;
+		indexes: { 'by-project': string };
+	};
+	transcripts: {
+		key: string; // threadId
+		value: TranscriptRecord;
+		indexes: { 'by-project': string };
+	};
+	artifacts: {
+		key: string; // artifact-<nanoid>
+		value: Artifact;
+		indexes: { 'by-project': string };
+	};
+	sources: {
+		key: string; // source-<nanoid>
+		value: Source;
+		indexes: { 'by-project': string };
 	};
 	kv: {
 		key: string;
@@ -140,6 +170,18 @@ function getDB(): Promise<IDBPDatabase<PlebChatDB>> {
 					// v2: Search mode research threads (device-local pi transcripts).
 					const searchThreads = db.createObjectStore('searchThreads', { keyPath: 'id' });
 					searchThreads.createIndex('by-updated', 'updatedAt');
+				}
+				if (oldVersion < 3) {
+					// v3: the workspace core (Synthesize/Debate) — projects with
+					// threads, verbatim transcripts, versioned artifacts, sources.
+					const projects = db.createObjectStore('projects', { keyPath: 'id' });
+					projects.createIndex('by-updated', 'updatedAt');
+					for (const name of ['workspaceThreads', 'artifacts', 'sources'] as const) {
+						const store = db.createObjectStore(name, { keyPath: 'id' });
+						store.createIndex('by-project', 'projectId');
+					}
+					const transcripts = db.createObjectStore('transcripts', { keyPath: 'threadId' });
+					transcripts.createIndex('by-project', 'projectId');
 				}
 			}
 		});
@@ -317,6 +359,104 @@ async function deleteSearchThread(id: string): Promise<void> {
 	await (await getDB()).delete('searchThreads', id);
 }
 
+// ---- workspace (projects / threads / transcripts / artifacts / sources) ----
+
+async function getAllProjects(): Promise<Project[]> {
+	return (await getDB()).getAll('projects');
+}
+
+async function getProject(id: string): Promise<Project | undefined> {
+	return (await getDB()).get('projects', id);
+}
+
+async function saveProject(project: Project): Promise<void> {
+	await (await getDB()).put('projects', clone(project));
+}
+
+/**
+ * Cascade-delete a project and everything under it in one transaction. No
+ * tombstones: workspace entities are local-first, outside the sync schema
+ * (revisited with the Debate-mode event-kind decision).
+ */
+async function deleteProjectCascade(id: string): Promise<void> {
+	const db = await getDB();
+	const tx = db.transaction(
+		['projects', 'workspaceThreads', 'transcripts', 'artifacts', 'sources', 'kv'],
+		'readwrite'
+	);
+	for (const store of ['workspaceThreads', 'transcripts', 'artifacts', 'sources'] as const) {
+		const index = tx.objectStore(store).index('by-project');
+		let cursor = await index.openCursor(IDBKeyRange.only(id));
+		while (cursor) {
+			await cursor.delete();
+			cursor = await cursor.continue();
+		}
+	}
+	await tx.objectStore('kv').delete(`workspace-state:${id}`);
+	await tx.objectStore('projects').delete(id);
+	await tx.done;
+}
+
+async function getProjectThreads(projectId: string): Promise<WorkspaceThread[]> {
+	return (await getDB()).getAllFromIndex('workspaceThreads', 'by-project', projectId);
+}
+
+async function saveWorkspaceThread(thread: WorkspaceThread): Promise<void> {
+	await (await getDB()).put('workspaceThreads', clone(thread));
+}
+
+async function deleteWorkspaceThread(id: string): Promise<void> {
+	const db = await getDB();
+	const tx = db.transaction(['workspaceThreads', 'transcripts'], 'readwrite');
+	await tx.objectStore('workspaceThreads').delete(id);
+	await tx.objectStore('transcripts').delete(id);
+	await tx.done;
+}
+
+async function getTranscript(threadId: string): Promise<TranscriptRecord | undefined> {
+	return (await getDB()).get('transcripts', threadId);
+}
+
+async function saveTranscript(record: TranscriptRecord): Promise<void> {
+	await (await getDB()).put('transcripts', clone(record));
+}
+
+async function getAllArtifacts(): Promise<Artifact[]> {
+	return (await getDB()).getAll('artifacts');
+}
+
+async function getProjectArtifacts(projectId: string): Promise<Artifact[]> {
+	return (await getDB()).getAllFromIndex('artifacts', 'by-project', projectId);
+}
+
+async function getArtifact(id: string): Promise<Artifact | undefined> {
+	return (await getDB()).get('artifacts', id);
+}
+
+async function saveArtifact(artifact: Artifact): Promise<void> {
+	await (await getDB()).put('artifacts', clone(artifact));
+}
+
+async function deleteArtifact(id: string): Promise<void> {
+	await (await getDB()).delete('artifacts', id);
+}
+
+async function getProjectSources(projectId: string): Promise<Source[]> {
+	return (await getDB()).getAllFromIndex('sources', 'by-project', projectId);
+}
+
+async function getSource(id: string): Promise<Source | undefined> {
+	return (await getDB()).get('sources', id);
+}
+
+async function saveSource(source: Source): Promise<void> {
+	await (await getDB()).put('sources', clone(source));
+}
+
+async function deleteSource(id: string): Promise<void> {
+	await (await getDB()).delete('sources', id);
+}
+
 // ---- kv ----
 
 async function getKV<T>(key: string): Promise<T | undefined> {
@@ -368,6 +508,34 @@ export const db = {
 		getAll: getAllSearchThreads,
 		save: saveSearchThread,
 		delete: deleteSearchThread
+	},
+	projects: {
+		getAll: getAllProjects,
+		get: getProject,
+		save: saveProject,
+		delete: deleteProjectCascade
+	},
+	workspaceThreads: {
+		getByProject: getProjectThreads,
+		save: saveWorkspaceThread,
+		delete: deleteWorkspaceThread
+	},
+	transcripts: {
+		get: getTranscript,
+		save: saveTranscript
+	},
+	artifacts: {
+		getAll: getAllArtifacts,
+		getByProject: getProjectArtifacts,
+		get: getArtifact,
+		save: saveArtifact,
+		delete: deleteArtifact
+	},
+	sources: {
+		getByProject: getProjectSources,
+		get: getSource,
+		save: saveSource,
+		delete: deleteSource
 	},
 	kv: {
 		get: getKV,

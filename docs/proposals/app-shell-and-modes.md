@@ -28,7 +28,7 @@ PlebChat is four mini-apps that share identity, wallet, theming, and navigation.
 ## Open questions
 
 - **Branding/palette**: violet-on-zinc is a starting point, not a decision.
-- **Custom domain**: repo name suggests `plebchat.me`; when wired up, `BASE_PATH` drops from the deploy workflow and Pages CNAME is added.
+- **Custom domain**: `plebchat.me` is the custom domain of the *user* Pages site, so this project already serves at `https://plebchat.me/plebchat-me/` (with `BASE_PATH` kept). If PlebChat should own the domain root instead, the domain moves to this repo's Pages settings and `BASE_PATH` drops — a deliberate decision to make later, since it evicts whatever the user site serves at the root.
 - **Mode-aware home**: should returning users land on their last mode instead of the welcome screen?
 
 ## Progress

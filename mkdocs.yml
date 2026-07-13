@@ -1,6 +1,8 @@
 site_name: PlebChat
 site_description: Read, search, synthesize and debate — a nostr-ecosystem app
-site_url: https://plebeiusgaragicus.github.io/plebchat-me/docs/
+# The user-site custom domain (plebchat.me) fronts all project Pages sites,
+# so this project serves at plebchat.me/plebchat-me/.
+site_url: https://plebchat.me/plebchat-me/docs/
 repo_url: https://github.com/PlebeiusGaragicus/plebchat-me
 repo_name: plebchat-me
 

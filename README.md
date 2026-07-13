@@ -2,7 +2,7 @@
 
 Read, search, synthesize and debate — a client-only, nostr-native web app. No accounts, no server: your identity is a keypair, your data syncs encrypted through relays you choose, and agent features run in your browser against your own LLM endpoint.
 
-**Docs:** https://plebeiusgaragicus.github.io/plebchat-me/docs/
+**Live app:** https://plebchat.me/plebchat-me/ · **Docs:** https://plebchat.me/plebchat-me/docs/
 
 ## Getting started
 

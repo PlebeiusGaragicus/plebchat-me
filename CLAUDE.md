@@ -95,6 +95,16 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - Assistant bubbles render markdown via `$lib/search/markdown.ts` (marked + DOMPurify, allow-listed tags); `[sN]` markers become `<span data-cite>` pre-parse and are handled by click delegation in MessageList — never regex-replace citations in post-sanitize HTML.
 - The Explore-Recent-Events feed queries a GENERAL relay (`relay.damus.io`, plain kind-30023 REQ + `#t` topics) — `relay.nostr.band` is search-only and never answers plain REQs (verified: no EOSE, 0 events). One-article-per-author cap keeps bulk publishers from filling the feed.
 
+## Synthesize / workspace-core gotchas
+
+- The workspace (`$lib/workspace/`) is the **shared core for Synthesize AND Debate** — keep it mode-agnostic; Synthesize-only copy lives in the route, Debate later = core + seminar persona. Data shapes are socratic-seminar's, living in `db/types.ts` like everything else (DB v3 stores).
+- **`$effect` cleanups run on every re-run, not just unmount.** A load-effect that writes reactive state it also reads will teardown-loop (reset stores → retrigger → reload forever). Pattern used in `WorkspaceView`: track the loaded id in a PLAIN variable inside the load effect, and put resets in a separate zero-dependency `$effect(() => () => {...})`.
+- Editor persistence is socratic-seminar's live-content model: keystrokes → `artifacts.updateLiveContent` (runtime map + dirty ids, never on the records), 500ms debounced `flush()` persists the current version **in place**; versions exist only via explicit snapshot. Agent `patch_file` flushes first, patches, flushes — open editors update reactively through `getLiveContent`. `flush()` captures its data synchronously, so store resets may follow a `void flushAll()` without awaiting.
+- The approval gate is a **mode-agnostic seam in `$lib/ai/runner.svelte.ts`** (`approvalRequired` set → `pendingApproval` $state + `respond()`; rejection feedback reaches the model as the blocked tool's error). Search passes no set; workspace gates `patch_file` only.
+- Deliberate cross-mode imports (shared machinery that happens to live in `$lib/search/`): `renderMarkdown`, `ToolCallCard`, and the AI settings dialog (opened via `searchUi.settingsOpen` from the workspace chat). `.md` markdown typography is global in `app.css`. Move them to a neutral home if a third consumer appears.
+- Deep links follow Read's pattern: `/synthesize?project=<id>` mirrored with `replaceState`, gated on `handledInitialUrl` (same mount-time-mirror trap as `?book=`).
+- e2e: card-shaped `role="button"` containers swallow inner buttons' accessible names — always `exact: true` on `getByRole` for hover actions inside cards; CodeMirror is driven via `.cm-content` click + `keyboard.type` (no textarea).
+
 ## Working agreements
 
 - **Feature proposals**: maintain thorough plan documents at `docs/proposals/<feature-plan-slug>.md` so features can be considered, designed, reviewed, and tweaked before implementation. Update each proposal as it's built out — they track progress across chat sessions.

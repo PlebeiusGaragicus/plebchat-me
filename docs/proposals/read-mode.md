@@ -1,46 +1,59 @@
 # Proposal: Read Mode
 
-**Status:** Draft · **Last updated:** 2026-07-12
+**Status:** Accepted — in progress · **Last updated:** 2026-07-13
 
 ## Summary
 
-A local-first reader: import EPUBs, read with per-device display settings, highlight and annotate, and sync everything — encrypted to yourself — over nostr. A direct port of the **vibereader** proof of concept into PlebChat's shell.
+A local-first reader: import EPUBs, read with per-book display settings, highlight and annotate, chat with an AI companion about passages, and sync everything — encrypted to yourself — over nostr, with Blossom file backup and social reading (public shelves, browsing friends' libraries, foreign-highlight overlays).
 
-## Motivation
+Built by **porting vibereader** (the complete, live, two-profile-verified app — not a rough PoC) into PlebChat's shell, then **swapping the renderer to foliate-js** (the library Readest uses; epub.js is abandonware), then adopting two SvelteReader features. PlebChat **supersedes** vibereader, which freezes as reference; this repo now owns the protocol contract ([Nostr Event Model](../nostr-event-model.md)).
 
-Reading is the input side of PlebChat's knowledge loop: books and documents read here become sources for Search, Synthesize, and Debate. vibereader already proved the full stack (epub.js rendering, annotation model, nostr sync contract); Read mode brings it in rather than reinventing it.
+## Decisions (2026-07-13)
 
-## Design
+1. **Port first, swap renderer second.** vibereader's code lands with its epub.js seam intact (proven, e2e-verifiable), then foliate-js replaces it as a contained step — the seam is two files (`epub/service.ts`, `epub/import.ts`) and the Phase 3 e2e suite is the swap's acceptance gate.
+2. **SvelteReader adoptions**: chapter-segmented progress bar; chat-threads-linked-to-annotations. **Not adopted**: client-side embeddings (different strategy planned); its PDF/files subsystem (prototype-grade — PDF support is a deferred phase with its own design).
+3. **Protocol continuity**: kinds 30101–30104 and the `vibereader` settings d-tag kept verbatim — both apps share the plebchat.me origin and relay data, so existing libraries appear on first sync. Accepted quirk: both live apps LWW the same 30103 settings event; a d-tag migration is documented as PlebChat's first owned protocol change (not built).
+4. **AI chat ports as-is** (BYO endpoint, device-local threads, `// PAYMENTS:` seam intact).
 
-Port vibereader's architecture wholesale, adapted to live under `/read`:
+### Architecture decisions
 
-- **EPUB engine**: a single module wrapping epub.js (`Book`/`Rendition`/`EpubCFI`), kept as plain module state (not `$state` — epub.js proxies break under runes reactivity). Reading themes (light/dark/sepia) apply inside the epub iframe, independent of app chrome.
-- **Storage**: per-npub IndexedDB; book files also pushed to Blossom for cross-device access.
-- **Annotations**: one unified highlight+note primitive whose stored records mirror the nostr event content 1:1.
-- **Nostr event model** (vibereader's `docs/nostr-event-model.md` is the binding contract):
-    - `30101` book metadata · `30102` reading progress · `30103` reader settings · `30104` annotation — all NIP-44 self-encrypted addressable events
-    - Sharing = republishing the same `30104` in plaintext; **NIP-84 kind `9802`** highlight exported at share time for interop (highlighter.com et al.)
-    - NIP-73 ISBN tags for cross-edition identity; Blossom kinds `10063`/`24242` for blobs
+- **Routing**: vibereader's `ui.view` switching (`library | reader | ghost | browse`) stays inside `/read/+page.svelte` — no subroute split (stores/reader lifecycle were built for single-page switching). Deep links via query params (`/read?book=<sha>`, `/read?view=browse`) mirrored with `replaceState`. Vibereader's own header dissolves: Sync/Browse/Settings/Import become a mode toolbar under the shared TopBar; a new shell-level `immersive` flag hides the TopBar in reader/ghost views.
+- **Session & storage**: mode-agnostic `$lib/session` (cyphertap login → per-npub DB) with a start/stop hook registry; **fresh DB `plebchat::<npub>`**, one DB for all modes. Not inheriting `vibereader::<npub>` — two live apps sharing a DB with divergent version counters is a corruption vector; relay sync repopulates everything except book-file Blobs, and a one-time **migration assistant** (same origin — the old DB is reachable) offers to copy `bookFiles`/`covers` Blobs across.
+- **Theming translation** (mechanical, at port time): `amber-500/600` accents → `primary` · zinc borders → `border` · `zinc-500/400` text → `muted-foreground` · zinc hover fills → `accent` · `zinc-50/900` surfaces → `background`/`card`. Kept literal: the annotation highlight palette (user data, mirrors 30104 content) and reading themes inside the epub iframe (independent of app chrome theme by design).
+- **Chat-on-annotations (Phase 8) inverts SvelteReader's design**: optional `annotationId` on the device-local `ChatThread` record — not thread ids on the annotation, because annotation records mirror 30104 content 1:1 and chats never sync; SvelteReader's shape would be a silent protocol change.
 
-### Reference material
+## Phases
 
-- vibereader `src/lib/epub/service.ts` (engine), `src/lib/stores/annotations.svelte.ts`, `src/lib/nostr/{kinds,events}.ts`, `docs/nostr-event-model.md`
-- SvelteReader `frontend/src/lib/components/reader/` — richer reader panel UI (ToC, annotations, settings panels)
-- Spec: `nips/84.md` (highlights), `nips/73.md` (external content ids)
+- [x] Phase 0 — Contract & docs: event model moved here with ownership header; this proposal rewritten; mkdocs nav.
+- [ ] Phase 1 — Shared foundations: deps (`epubjs`, `idb`, `nanoid`; `jszip` dev), `$lib/db` (`plebchat::<npub>` v1), `$lib/session` + root-layout bridge, `$lib/stores/settings` (`plebchat-settings` key), shell `immersive` store + TopBar hide.
+- [ ] Phase 2 — Reader core under `/read`: epub service/import, read stores, library + reader components (theme-translated), view switch + toolbar + deep links + immersive, CLAUDE.md gotchas batch 1.
+- [ ] Phase 3 — Playwright suite (permanent acceptance harness + foliate-swap gate): generated-EPUB fixture builder (jszip; validate first — fallback: tiny committed public-domain epub), `ncrypt` localStorage login helper, tests: logged-out gate · import→card · sha256 dedup · open/paginate/ToC · reading-theme switch in iframe · progress resume after reload · highlights in two chapters spine-sorted · note edit · annotation delete · cascade delete · chat panel opens · settings persist.
+- [ ] Phase 4 — AI chat: `$lib/ai/client.ts` (SSE + fallback, payments seam), prompt, chat store, ChatPanel, settings AI section.
+- [ ] Phase 5 — Sync + Blossom + sharing: nostr codecs/sync verbatim, sync toolbar + dirty dot, per-book Blossom backup/restore, sharing (plaintext 30104 + optional NIP-84 9802), **vibereader→plebchat DB migration assistant**, gotchas batch 2.
+- [ ] Phase 6 — Social reading: browse store/view, GhostView, foreign-highlight overlays, public shelf toggle.
+- [ ] Phase 7 — foliate-js swap: vendor as source ESM (pinned commit recorded), rewrite `service.ts`/`import.ts` against existing signatures, drop `epubjs`, accept `.mobi`/`.fb2`/`.cbz`, adapt locations payload. **Gate: Phase-3 suite passes unchanged** and pre-swap annotations (incl. relay-synced) resolve.
+- [ ] Phase 8 — Adoptions: chapter-segmented ProgressBar (`getChapterPositions` built once, on foliate); `annotationId` on ChatThread (DB v2).
+- [ ] Phase 9 (deferred) — PDF/files support: own proposal needed; SvelteReader's implementation is reference-only.
+
+Each phase is one reviewable commit to master (Phase 2 may split into two), gated on `pnpm check` + `pnpm build` + full Playwright suite; `BASE_PATH=/plebchat-me pnpm build && pnpm preview` smoke before Phases 2, 5, 7.
+
+## Manual verification checklist (not CI-testable)
+
+Sync/Blossom/browse need the pubkey-whitelisted relay (`relay.abvstudio.net`) and a Blossom server — CI can't reach them, so these are verified manually per phase with the alice/bob test accounts (`../my-projects/.test-accounts.json`), matching vibereader's Phase D/E precedent:
+
+1. **Phase 5**: alice imports + annotates + syncs → bob-as-alice on a second profile pulls the library; tombstone propagation; Blossom backup → wipe → restore. **Decision-3 acceptance**: an existing vibereader identity logs into PlebChat → first sync populates the library; migration assistant recovers file Blobs.
+2. **Phase 6**: alice shares book + annotations → bob browses alice's shelf → downloads the book from her Blossom pointer (sha-verified) → foreign-highlight overlay toggles in bob's reader.
+3. **Phase 7**: annotations created pre-swap (incl. relay-synced ones) render correctly under foliate.
+
+## Reference material
+
+- vibereader — the source of the port: `src/lib/{db,epub,stores,nostr,ai}/`, `src/routes/+page.svelte`; its `CLAUDE.md` gotcha list migrates here as phases land; `proposals.md` #2 is the accepted foliate-js plan (risks, vendoring, CFI compatibility).
+- SvelteReader `frontend/src/lib/components/reader/ProgressBar.svelte` + `epubService.getChapterPositions` (Phase 8); its annotation/chat-thread linkage (inverted here).
+- foliate-js: github.com/johnfactotum/foliate-js — read Readest as the reference consumer.
+- Specs: `nips/84.md`, `nips/73.md`, `nips/44.md`, `nips/09.md`; Blossom BUD-01/02/03/06/11 (standard-base64 auth quirk documented in the event model).
 
 ## Open questions
 
-- **Scope creep vs. port**: vibereader is a working app — is Read mode v1 literally its code moved in, or a re-implementation trimmed to essentials? (Recommendation: move the code, trim after.)
-- **PDF support**: SvelteReader had pdfjs; vibereader dropped it. Defer?
-- **Namespace**: do we keep vibereader's kinds 30101–30104 verbatim (interop with existing events) or mint PlebChat kinds? Keeping them means a vibereader user's library appears in PlebChat automatically — probably desirable.
-
-## Progress
-
-- [ ] Decide port-vs-reimplement and kind namespace
-- [ ] EPUB engine + import under `/read`
-- [ ] Library grid + reader view + display settings
-- [ ] Annotations (create, list, colors, notes)
-- [ ] Nostr sync (30101–30104, NIP-44)
-- [ ] Blossom book-file upload
-- [ ] NIP-84 share flow
-- [ ] Playwright e2e (import fixture EPUB, annotate, reload persistence)
+- Settings d-tag migration (`vibereader` → `plebchat`) timing — after vibereader usage ends.
+- Local ephemeral relay (e.g. `nak serve`) in CI to make sync testable — revisit after Phase 5.
+- PDF/files design (Phase 9) — needs its own proposal before any code.

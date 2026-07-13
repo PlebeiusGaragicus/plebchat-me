@@ -53,6 +53,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Philosophy: PHILOSOPHY.md
+  - Nostr Event Model: nostr-event-model.md
   - Development: development.md
   - Proposals:
       - App Shell & Modes: proposals/app-shell-and-modes.md

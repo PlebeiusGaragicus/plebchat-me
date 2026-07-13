@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CloudDownload, CloudUpload, Ellipsis, Info, Loader2, Trash2 } from '@lucide/svelte';
+	import { CloudDownload, CloudUpload, Ellipsis, Info, Loader2, Pencil, Trash2 } from '@lucide/svelte';
 	import type { Book } from '$lib/db/types.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
 	import { sync } from '$lib/read/stores/sync.svelte.js';
@@ -90,6 +90,16 @@
 				}}
 			>
 				<Info class="size-3.5 text-muted-foreground" /> Info
+			</button>
+			<button
+				class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-accent"
+				role="menuitem"
+				onclick={() => {
+					menuOpen = false;
+					ui.editSha = book.sha256;
+				}}
+			>
+				<Pencil class="size-3.5 text-muted-foreground" /> Edit metadata
 			</button>
 			{#if !busy}
 				{#if missing}

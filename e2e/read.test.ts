@@ -150,6 +150,33 @@ test.describe('logged in', () => {
 		await expect(page.getByTestId('annotation-card')).toHaveCount(1);
 	});
 
+	test('edits book metadata from the card menu', async ({ page }) => {
+		await importFixture(page);
+		await page.hover('[data-testid="book-card"]');
+		await page.click('[data-testid="book-card"] button[title="Book actions"]');
+		await page.getByRole('menuitem', { name: 'Edit metadata' }).click();
+		await expect(page.getByTestId('book-edit-dialog')).toBeVisible();
+		await page.fill('[data-testid="edit-title"]', 'Renamed Fixture');
+		await page.fill('[data-testid="edit-creator"]', 'New Author');
+		await page.click('[data-testid="edit-save"]');
+		await expect(page.getByTestId('book-edit-dialog')).toHaveCount(0);
+		await expect(page.getByTestId('book-card')).toContainText('Renamed Fixture');
+		await expect(page.getByTestId('book-card')).toContainText('New Author');
+	});
+
+	test('sync cloud button opens the status popover', async ({ page }) => {
+		await importFixture(page);
+		await page.click('[data-testid="sync-button"]');
+		await expect(page.getByTestId('sync-popover')).toBeVisible();
+		await expect(page.getByTestId('sync-popover')).toContainText('Nostr sync');
+		// A fresh import means unsynced local changes.
+		await expect(page.getByTestId('sync-popover')).toContainText('Unsynced changes');
+		await expect(page.getByTestId('sync-now')).toBeEnabled();
+		// Click-away closes it without syncing.
+		await page.mouse.click(10, 300);
+		await expect(page.getByTestId('sync-popover')).toHaveCount(0);
+	});
+
 	test('deleting a book cascades', async ({ page }) => {
 		await importFixture(page);
 		await page.hover('[data-testid="book-card"]');

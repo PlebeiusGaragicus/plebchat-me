@@ -28,11 +28,12 @@
 		<div class="flex flex-col gap-2">
 			{#each annotations.all as anno (anno.id)}
 				<div
-					class="group rounded-lg border border-border p-2.5 hover:border-muted-foreground/40"
+					class="group rounded-lg border border-border p-2.5 transition-all hover:border-muted-foreground/40 hover:shadow-md"
 					data-testid="annotation-card"
 				>
+					<!-- Only the quote itself jumps/opens — blank card space stays inert. -->
 					<button
-						class="w-full text-left"
+						class="max-w-full rounded text-left hover:bg-accent/50"
 						onclick={() => {
 							void annotations.goTo(anno.id).then(() => selection.edit(anno.id, null));
 						}}

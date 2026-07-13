@@ -11,7 +11,6 @@
 
 <div class="flex h-full flex-col">
 	<ReaderToolbar />
-	<ProgressBar />
 	<div class="flex min-h-0 flex-1">
 		{#if ui.tocOpen}
 			<TocSidebar />
@@ -32,4 +31,5 @@
 			<ChatPanel />
 		{/if}
 	</div>
+	<ProgressBar />
 </div>

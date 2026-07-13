@@ -8,6 +8,7 @@ let annotationsOpen = $state(false);
 let chatOpen = $state(false);
 let settingsOpen = $state(false);
 let infoSha = $state<string | null>(null);
+let editSha = $state<string | null>(null);
 
 export const ui = {
 	get view() {
@@ -52,6 +53,12 @@ export const ui = {
 	set infoSha(v: string | null) {
 		infoSha = v;
 	},
+	get editSha() {
+		return editSha;
+	},
+	set editSha(v: string | null) {
+		editSha = v;
+	},
 	reset() {
 		view = 'library';
 		ghostSha = null;
@@ -60,5 +67,6 @@ export const ui = {
 		chatOpen = false;
 		settingsOpen = false;
 		infoSha = null;
+		editSha = null;
 	}
 };

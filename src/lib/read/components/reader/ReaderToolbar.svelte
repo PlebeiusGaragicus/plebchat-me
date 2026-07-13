@@ -25,18 +25,11 @@
 		<List class="size-4" />
 	</button>
 
+	<!-- Section label + % live in the bottom ProgressBar footer. -->
 	<div class="min-w-0 flex-1 text-center">
 		<span class="truncate text-sm font-medium">{reader.book?.title}</span>
-		{#if reader.location?.sectionLabel}
-			<span class="hidden truncate text-sm text-muted-foreground sm:inline">
-				— {reader.location.sectionLabel}</span
-			>
-		{/if}
 	</div>
 
-	<span class="w-12 text-right text-xs tabular-nums text-muted-foreground">
-		{reader.percentage !== undefined ? `${Math.round(reader.percentage * 100)}%` : '…'}
-	</span>
 	<div class="relative">
 		<button
 			data-testid="display-settings-toggle"

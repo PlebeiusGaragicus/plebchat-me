@@ -6,15 +6,20 @@ import { toast } from 'svelte-sonner';
 import { db } from '$lib/db/index.js';
 import { extractCover } from '$lib/read/epub/import.js';
 import { canUpload, downloadBlob, publishServerList, uploadBlob } from '$lib/nostr/blossom.js';
-import { lastSyncAt, syncNow } from '$lib/read/nostr/sync.js';
+import { lastSyncAt, syncNow, type SyncSummary } from '$lib/read/nostr/sync.js';
 import { sha256Hex } from '$lib/utils.js';
 import { library } from './library.svelte.js';
 import { settingsStore } from '$lib/stores/settings.svelte.js';
 
-let syncing = $state(false);
+type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+
+let status = $state<SyncStatus>('idle');
+let error = $state<string | null>(null);
+let lastSummary = $state<SyncSummary | null>(null);
 let backingUp = $state<Record<string, boolean>>({});
 let dirty = $state(false);
 let lastSynced = $state(0);
+let successTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function checkDirty(): Promise<void> {
 	lastSynced = await lastSyncAt();
@@ -36,8 +41,10 @@ async function checkDirty(): Promise<void> {
 }
 
 async function run(): Promise<void> {
-	if (syncing) return;
-	syncing = true;
+	if (status === 'syncing') return;
+	clearTimeout(successTimer);
+	status = 'syncing';
+	error = null;
 	try {
 		const summary = await syncNow(settingsStore.settings.relays, {
 			readingSettings: () => ({
@@ -48,6 +55,11 @@ async function run(): Promise<void> {
 		});
 		await library.refresh();
 		await checkDirty();
+		lastSummary = summary;
+		status = 'success';
+		successTimer = setTimeout(() => {
+			if (status === 'success') status = 'idle';
+		}, 3000);
 		const restorable = summary.restorableBooks.length;
 		toast.success(
 			`Synced — pushed ${summary.pushed}, pulled ${summary.pulled}` +
@@ -56,9 +68,9 @@ async function run(): Promise<void> {
 		);
 	} catch (err) {
 		console.error(err);
-		toast.error(err instanceof Error ? err.message : 'Sync failed');
-	} finally {
-		syncing = false;
+		error = err instanceof Error ? err.message : 'Sync failed';
+		status = 'error';
+		toast.error(error);
 	}
 }
 
@@ -158,7 +170,10 @@ async function restoreBook(sha256: string): Promise<void> {
 }
 
 function reset(): void {
-	syncing = false;
+	clearTimeout(successTimer);
+	status = 'idle';
+	error = null;
+	lastSummary = null;
 	backingUp = {};
 	dirty = false;
 	lastSynced = 0;
@@ -166,7 +181,16 @@ function reset(): void {
 
 export const sync = {
 	get syncing() {
-		return syncing;
+		return status === 'syncing';
+	},
+	get status() {
+		return status;
+	},
+	get error() {
+		return error;
+	},
+	get lastSummary() {
+		return lastSummary;
 	},
 	get dirty() {
 		return dirty;

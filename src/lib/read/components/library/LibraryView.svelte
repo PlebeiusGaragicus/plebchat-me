@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { BookOpen, RefreshCw, Settings, Users } from '@lucide/svelte';
+	import { BookOpen, Settings, Users } from '@lucide/svelte';
 	import { browse } from '$lib/read/stores/browse.svelte.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
-	import { sync } from '$lib/read/stores/sync.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
 	import BookCard from './BookCard.svelte';
+	import BookEditDialog from './BookEditDialog.svelte';
 	import BookInfoDialog from './BookInfoDialog.svelte';
 	import ImportButton from './ImportButton.svelte';
+	import SyncStatusButton from './SyncStatusButton.svelte';
 
 	let dragging = $state(false);
 
@@ -44,21 +45,7 @@
 			>
 				<Users class="size-4" />
 			</button>
-			<button
-				data-testid="sync-button"
-				class="relative rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-				title="Sync library state with your relays"
-				disabled={sync.syncing}
-				onclick={() => void sync.run()}
-			>
-				<RefreshCw class="size-4 {sync.syncing ? 'animate-spin' : ''}" />
-				{#if sync.dirty}
-					<span
-						data-testid="sync-dirty-dot"
-						class="absolute top-1 right-1 size-1.5 rounded-full bg-primary"
-					></span>
-				{/if}
-			</button>
+			<SyncStatusButton />
 			<button
 				data-testid="read-settings-toggle"
 				class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -90,4 +77,8 @@
 
 {#if ui.infoSha}
 	<BookInfoDialog sha256={ui.infoSha} />
+{/if}
+
+{#if ui.editSha}
+	<BookEditDialog sha256={ui.editSha} />
 {/if}

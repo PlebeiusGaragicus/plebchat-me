@@ -50,6 +50,8 @@ interface FoliateView extends HTMLElement {
 	close(): void;
 	init(opts: { lastLocation?: string | null }): Promise<void>;
 	goTo(target: string | number): Promise<unknown>;
+	goToFraction(fraction: number): Promise<void>;
+	getSectionFractions(): number[];
 	next(): Promise<void>;
 	prev(): Promise<void>;
 	deselect(): void;
@@ -63,6 +65,7 @@ interface FoliateView extends HTMLElement {
 interface FoliateBook {
 	metadata?: Record<string, unknown>;
 	toc?: FoliateTocItem[];
+	sections?: { id?: string; linear?: string }[];
 	getCover?(): Promise<Blob | null>;
 	destroy?(): void;
 }
@@ -271,6 +274,40 @@ export async function ensureLocations(): Promise<void> {}
 
 export function percentageFromCfi(_cfi: string): number | undefined {
 	return lastFraction;
+}
+
+/** One entry per spine section: where it starts (0–1) and its ToC label. */
+export interface SectionSegment {
+	start: number;
+	end: number;
+	label?: string;
+}
+
+/** Chapter segments for the progress bar — spine sections mapped onto the
+ * book's overall fraction axis (foliate computes the boundaries natively). */
+export function getSectionSegments(): SectionSegment[] {
+	if (!view || !book) return [];
+	let fractions: number[];
+	try {
+		fractions = view.getSectionFractions();
+	} catch {
+		return [];
+	}
+	if (fractions.length < 2) return [];
+	const segments: SectionSegment[] = [];
+	for (let i = 0; i < fractions.length - 1; i++) {
+		if (fractions[i + 1] - fractions[i] <= 0) continue; // non-linear/empty section
+		segments.push({
+			start: fractions[i],
+			end: fractions[i + 1],
+			label: sectionLabelFor(book.sections?.[i]?.id)
+		});
+	}
+	return segments;
+}
+
+export function goToFraction(fraction: number): void {
+	void view?.goToFraction(fraction);
 }
 
 // ---- annotations ----

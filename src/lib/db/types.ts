@@ -93,6 +93,14 @@ export interface ChatThread {
 	sha256: string;
 	title: string;
 	context?: { cfiRange: string; quote: string };
+	/**
+	 * Optional link to an annotation, so a highlight can carry a conversation.
+	 * The link lives HERE (device-local) and never on the annotation record —
+	 * annotations mirror kind-30104 event content 1:1 and chats never sync, so
+	 * the SvelteReader design (thread ids on the annotation) would have been a
+	 * silent protocol change.
+	 */
+	annotationId?: string;
 	messages: ChatMessage[];
 	createdAt: number;
 	updatedAt: number;

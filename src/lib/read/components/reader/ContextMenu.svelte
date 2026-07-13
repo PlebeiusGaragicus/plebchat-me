@@ -107,12 +107,13 @@
 				class="rounded p-1.5 text-muted-foreground hover:bg-accent"
 				title="Chat about this"
 				onclick={() => {
-					const context = editing
-						? { cfiRange: editing.cfiRange, quote: editing.quote }
-						: selection.active
-							? { cfiRange: selection.active.cfiRange, quote: selection.active.text }
-							: null;
-					if (context) chat.startFromSelection(context);
+					// Chatting about an existing annotation links (or reopens) its thread.
+					if (editing) chat.openForAnnotation(editing);
+					else if (selection.active)
+						chat.startFromSelection({
+							cfiRange: selection.active.cfiRange,
+							quote: selection.active.text
+						});
 					close();
 				}}
 			>

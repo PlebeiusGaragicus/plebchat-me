@@ -4,12 +4,14 @@
 	import ChatPanel from '$lib/read/components/chat/ChatPanel.svelte';
 	import AnnotationSidebar from './AnnotationSidebar.svelte';
 	import EpubViewer from './EpubViewer.svelte';
+	import ProgressBar from './ProgressBar.svelte';
 	import ReaderToolbar from './ReaderToolbar.svelte';
 	import TocSidebar from './TocSidebar.svelte';
 </script>
 
 <div class="flex h-full flex-col">
 	<ReaderToolbar />
+	<ProgressBar />
 	<div class="flex min-h-0 flex-1">
 		{#if ui.tocOpen}
 			<TocSidebar />

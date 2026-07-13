@@ -220,6 +220,61 @@ test.describe('logged in', () => {
 		await expect(page.locator('header').first()).toBeVisible();
 	});
 
+	test('chapter-segmented progress bar renders and navigates', async ({ page }) => {
+		await importFixture(page);
+		await openFirstBook(page, CH1_TEXT);
+		await expect(page.getByTestId('progress-segment')).toHaveCount(3); // 3 fixture chapters
+		await expect(page.getByTestId('progress-marker')).toBeVisible();
+		// Clicking the second segment jumps to chapter 2.
+		await page.getByTestId('progress-segment').nth(1).click();
+		await waitForBookText(page, CH2_TEXT);
+	});
+
+	test('a highlight carries a chat thread (link survives reload)', async ({ page }) => {
+		await page.route('**/chat/completions', async (route) => {
+			await route.fulfill({
+				contentType: 'application/json',
+				body: JSON.stringify({ choices: [{ message: { content: 'About that passage…' } }] })
+			});
+		});
+		await page.click('[data-testid="read-settings-toggle"]');
+		await page.fill('[data-testid="ai-base-url"]', 'https://mock.invalid/v1');
+		await page.fill('[data-testid="read-settings"] input[placeholder^="e.g."]', 'mock-model');
+		await page.getByText('Stream responses').click();
+		await page.click('[data-testid="settings-save"]');
+
+		await importFixture(page);
+		await openFirstBook(page, CH1_TEXT);
+		await selectBookText(page, CH1_TEXT);
+		await page.click('[data-testid="highlight-yellow"]');
+
+		// Discuss from the sidebar card → linked thread opens with the quote.
+		await page.click('[data-testid="annotations-toggle"]');
+		await page.hover('[data-testid="annotation-card"]');
+		await page.click('[data-testid="annotation-discuss"]');
+		await expect(page.getByTestId('chat-panel')).toBeVisible();
+		await expect(page.getByTestId('chat-panel')).toContainText('Alpha fixture');
+
+		// A message persists the thread (empty threads are ephemeral by design).
+		await page.fill('[data-testid="chat-input"]', 'Thoughts?');
+		await page.click('[data-testid="chat-send"]');
+		await expect(page.getByTestId('chat-message-assistant')).toContainText('About that passage');
+
+		// The thread list marks it as annotation-linked; the link survives reload.
+		await page.waitForTimeout(1200);
+		await page.reload();
+		await waitForBookText(page, CH1_TEXT, 20000);
+		await page.click('[data-testid="chat-toggle"]');
+		await expect(page.getByTestId('thread-annotation-link')).toBeVisible();
+
+		// Discussing the same annotation again reopens the SAME thread.
+		await page.click('[data-testid="annotations-toggle"]');
+		await page.hover('[data-testid="annotation-card"]');
+		await page.click('[data-testid="annotation-discuss"]');
+		await page.click('[data-testid="chat-panel"] button[title="All chats"]');
+		await expect(page.getByTestId('chat-thread')).toHaveCount(1);
+	});
+
 	test('offers to migrate a vibereader library found on this origin', async ({ page }) => {
 		// Seed a minimal vibereader::<npub> DB for the SAME identity, then
 		// reload so the session-start hook discovers it.

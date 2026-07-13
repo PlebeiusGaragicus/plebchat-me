@@ -26,7 +26,10 @@ async function load(forBook: Book): Promise<void> {
 	activeId = null;
 }
 
-function startFromSelection(context: { cfiRange: string; quote: string }): void {
+function startFromSelection(
+	context: { cfiRange: string; quote: string },
+	annotationId?: string
+): void {
 	if (!book) return;
 	const now = Date.now();
 	const thread: ChatThread = {
@@ -34,6 +37,7 @@ function startFromSelection(context: { cfiRange: string; quote: string }): void 
 		sha256: book.sha256,
 		title: context.quote.slice(0, 60),
 		context,
+		annotationId,
 		messages: [],
 		createdAt: now,
 		updatedAt: now
@@ -41,6 +45,25 @@ function startFromSelection(context: { cfiRange: string; quote: string }): void 
 	threads.push(thread);
 	activeId = thread.id;
 	ui.chatOpen = true;
+}
+
+/** Open the newest thread linked to this annotation, or start one. */
+function openForAnnotation(anno: {
+	id: string;
+	cfiRange: string;
+	quote: string;
+}): void {
+	const linked = sorted.find((t) => t.annotationId === anno.id);
+	if (linked) {
+		activeId = linked.id;
+		ui.chatOpen = true;
+		return;
+	}
+	startFromSelection({ cfiRange: anno.cfiRange, quote: anno.quote }, anno.id);
+}
+
+function threadCountFor(annotationId: string): number {
+	return threads.filter((t) => t.annotationId === annotationId).length;
 }
 
 function startGeneral(): void {
@@ -138,6 +161,8 @@ export const chat = {
 	},
 	load,
 	startFromSelection,
+	openForAnnotation,
+	threadCountFor,
 	startGeneral,
 	send,
 	stop,

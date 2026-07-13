@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { Eye, EyeOff, Globe, Loader2, StickyNote, Users } from '@lucide/svelte';
+	import { Eye, EyeOff, Globe, Loader2, MessageSquare, StickyNote, Users } from '@lucide/svelte';
 	import { HIGHLIGHT_COLORS, display } from '$lib/read/epub/service.js';
 	import { annotations } from '$lib/read/stores/annotations.svelte.js';
+	import { chat } from '$lib/read/stores/chat.svelte.js';
 	import { foreignAnnotations } from '$lib/read/stores/foreignAnnotations.svelte.js';
 	import { reader } from '$lib/read/stores/reader.svelte.js';
 	import { selection } from '$lib/read/stores/selection.svelte.js';
@@ -81,7 +82,22 @@
 							</div>
 						</div>
 					{:else}
-						<div class="mt-1 flex justify-end">
+						<div class="mt-1 flex items-center justify-end gap-1">
+							<button
+								data-testid="annotation-discuss"
+								class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs {chat.threadCountFor(
+									anno.id
+								) > 0
+									? 'text-primary'
+									: 'hidden text-muted-foreground group-hover:flex hover:text-foreground'}"
+								title={chat.threadCountFor(anno.id) > 0
+									? 'Open the conversation about this highlight'
+									: 'Chat about this highlight'}
+								onclick={() => chat.openForAnnotation(anno)}
+							>
+								<MessageSquare class="size-3" />
+								{chat.threadCountFor(anno.id) || ''}
+							</button>
 							<button
 								data-testid="annotation-share-toggle"
 								class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs {anno.shared

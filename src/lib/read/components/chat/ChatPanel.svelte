@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowLeft, MessageSquarePlus, Send, Square, Trash2 } from '@lucide/svelte';
+	import { ArrowLeft, Highlighter, MessageSquarePlus, Send, Square, Trash2 } from '@lucide/svelte';
 	import { chat } from '$lib/read/stores/chat.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
@@ -64,7 +64,14 @@
 							class="min-w-0 flex-1 rounded-lg p-2 text-left hover:bg-accent"
 							onclick={() => (chat.activeId = thread.id)}
 						>
-							<div class="truncate text-sm">{thread.title}</div>
+							<div class="flex items-center gap-1.5 text-sm">
+								{#if thread.annotationId}
+									<span data-testid="thread-annotation-link" class="shrink-0 text-primary">
+										<Highlighter class="size-3" />
+									</span>
+								{/if}
+								<span class="truncate">{thread.title}</span>
+							</div>
 							{#if thread.context}
 								<div class="truncate text-xs text-primary/80">
 									“{thread.context.quote.slice(0, 50)}”

@@ -24,6 +24,18 @@ export interface ToolRun {
 	resultText?: string;
 }
 
+export interface PendingApproval {
+	toolName: string;
+	args: unknown;
+	resolve: (decision: ApprovalDecision) => void;
+	reject: (reason?: unknown) => void;
+}
+
+export interface ApprovalDecision {
+	approved: boolean;
+	feedback?: string;
+}
+
 export interface RunnerConfig {
 	/** Composed fresh per run — gate sections on the tools actually present. */
 	buildSystemPrompt: () => string;
@@ -33,6 +45,13 @@ export interface RunnerConfig {
 	persist?: (messages: AgentMessage[]) => void | Promise<void>;
 	/** Transcript to rehydrate (sanitized here — orphaned toolCalls healed). */
 	initialMessages?: AgentMessage[];
+	/** Async transcript loader — send() waits for it once (device-local
+	 * transcripts stored separately from thread metadata). */
+	loadInitialMessages?: () => Promise<AgentMessage[]>;
+	/** Tool names gated behind user approval (pendingApproval + respond()). */
+	approvalRequired?: Set<string>;
+	/** UI hook fired when approval is requested (e.g. reveal the target file). */
+	onApprovalRequest?: (toolName: string, args: unknown) => void;
 }
 
 export class AgentRunner {
@@ -41,20 +60,34 @@ export class AgentRunner {
 	isStreaming = $state(false);
 	error = $state<string | null>(null);
 	toolRuns = $state<Record<string, ToolRun>>({});
+	pendingApproval = $state<PendingApproval | null>(null);
 
 	private agent: Agent;
 	private config: RunnerConfig;
+	private hydration: Promise<void> | null = null;
 
 	constructor(config: RunnerConfig) {
 		this.config = config;
 		this.agent = new Agent({
 			getApiKey: () => settingsStore.settings.ai.apiKey || undefined,
-			transformContext: async (messages) => pruneContext(messages)
+			transformContext: async (messages) => pruneContext(messages),
+			beforeToolCall: async (context, signal) => {
+				if (!config.approvalRequired?.has(context.toolCall.name)) return undefined;
+				return this.requestApproval(context.toolCall.name, context.args, signal);
+			}
 		});
 		if (config.initialMessages?.length) {
 			this.agent.state.messages = sanitizeTranscript(config.initialMessages);
 			this.syncMessages();
 			this.rebuildToolRuns();
+		} else if (config.loadInitialMessages) {
+			this.hydration = config.loadInitialMessages().then((stored) => {
+				if (stored.length && this.agent.state.messages.length === 0) {
+					this.agent.state.messages = sanitizeTranscript(stored);
+					this.syncMessages();
+					this.rebuildToolRuns();
+				}
+			});
 		}
 		this.agent.subscribe((event) => {
 			switch (event.type) {
@@ -100,13 +133,65 @@ export class AgentRunner {
 		});
 	}
 
-	get status(): 'idle' | 'busy' | 'error' {
+	get status(): 'idle' | 'busy' | 'awaiting-input' | 'error' {
+		if (this.pendingApproval) return 'awaiting-input';
 		if (this.isStreaming) return 'busy';
 		if (this.error) return 'error';
 		return 'idle';
 	}
 
+	/** Gate a tool call behind user approval. Returning {block, reason} makes
+	 * pi emit an error tool result, so rejection feedback reaches the model. */
+	private async requestApproval(
+		toolName: string,
+		args: unknown,
+		signal?: AbortSignal
+	): Promise<{ block: true; reason: string } | undefined> {
+		this.config.onApprovalRequest?.(toolName, args);
+		let decision: ApprovalDecision;
+		try {
+			decision = await new Promise<ApprovalDecision>((resolve, reject) => {
+				const abortHandler = () => {
+					this.pendingApproval = null;
+					reject(new Error('Run stopped while awaiting approval.'));
+				};
+				if (signal?.aborted) return abortHandler();
+				signal?.addEventListener('abort', abortHandler, { once: true });
+				this.pendingApproval = {
+					toolName,
+					args,
+					resolve: (value) => {
+						signal?.removeEventListener('abort', abortHandler);
+						resolve(value);
+					},
+					reject: (reason) => {
+						signal?.removeEventListener('abort', abortHandler);
+						reject(reason);
+					}
+				};
+			});
+		} catch {
+			return { block: true, reason: 'The run was stopped before the user decided.' };
+		}
+		if (decision.approved) return undefined;
+		return {
+			block: true,
+			reason: decision.feedback
+				? `User rejected this edit with feedback: ${decision.feedback}`
+				: 'User rejected this edit.'
+		};
+	}
+
+	/** Resolve the pending approval (from the chat panel's banner). */
+	respond(decision: ApprovalDecision): void {
+		const pending = this.pendingApproval;
+		if (!pending) return;
+		this.pendingApproval = null;
+		pending.resolve(decision);
+	}
+
 	async send(text: string): Promise<void> {
+		if (this.hydration) await this.hydration;
 		if (this.isStreaming) return;
 		this.error = null;
 		this.agent.state.model = buildModel(settingsStore.settings.ai);
@@ -121,6 +206,11 @@ export class AgentRunner {
 	}
 
 	stop(): void {
+		if (this.pendingApproval) {
+			const pending = this.pendingApproval;
+			this.pendingApproval = null;
+			pending.reject(new Error('Stopped by user'));
+		}
 		this.agent.abort();
 	}
 

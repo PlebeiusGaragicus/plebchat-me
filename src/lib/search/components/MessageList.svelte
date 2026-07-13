@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { AgentRunner } from '$lib/ai/runner.svelte.js';
 	import { renderMarkdown } from '../markdown.js';
-	import { assistantBlocks, isDisplayable, messageRole, userText } from '../render.js';
+	import { assistantBlocks, isDisplayable, messageRole, userText } from '$lib/ai/render.js';
 	import { searchUi } from '../stores/ui.svelte.js';
 	import ToolCallCard from './ToolCallCard.svelte';
 

@@ -1,8 +1,92 @@
-// Synthesize mode e2e: workspace-core dashboard (Phase 1) and the pane
-// layout — sidebar, tabbed columns, file/source panes (Phase 2). The editor
-// and agent tests join in later phases.
+// Synthesize mode e2e: workspace-core dashboard (Phase 1), the pane layout
+// (Phase 2), the versioned editor (Phase 3), and the agent with the
+// patch-approval gate against a mocked SSE LLM endpoint (Phase 4 — pi-ai
+// drives the endpoint through the OpenAI SDK with stream:true, so the mock
+// answers in chat.completion.chunk frames like e2e/search.test.ts).
 import { expect, test, type Page } from '@playwright/test';
 import { seedLogin } from './helpers.js';
+
+function sse(chunks: unknown[]): string {
+	return [...chunks.map((c) => `data: ${JSON.stringify(c)}`), 'data: [DONE]', ''].join('\n\n');
+}
+
+function chunk(delta: Record<string, unknown>, finish: string | null = null): unknown {
+	return {
+		id: 'mock-1',
+		object: 'chat.completion.chunk',
+		created: 1,
+		model: 'mock-model',
+		choices: [{ index: 0, delta, finish_reason: finish }]
+	};
+}
+
+function toolCallChunks(name: string, args: unknown): unknown[] {
+	return [
+		chunk({
+			role: 'assistant',
+			tool_calls: [
+				{ index: 0, id: `call_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }
+			]
+		}),
+		chunk({}, 'tool_calls')
+	];
+}
+
+/**
+ * Seed app settings via localStorage BEFORE load. Saved settings override the
+ * dev .env prefill, so tests are hermetic whether or not a .env is filled.
+ */
+async function seedSettings(page: Page, configured: boolean): Promise<void> {
+	const settings = {
+		ai: configured
+			? {
+					baseUrl: 'https://mock.invalid/v1',
+					model: 'mock-model',
+					apiKey: 'test-key',
+					streaming: true,
+					api: 'openai-completions'
+				}
+			: { baseUrl: '', model: '', apiKey: '' }
+	};
+	await page.addInitScript(
+		(json) => localStorage.setItem('plebchat-settings', json),
+		JSON.stringify(settings)
+	);
+}
+
+/**
+ * Mock LLM for the patch flow: list_files → patch_file (id lifted from the
+ * list_files tool result in the request) → text answer. If the patch tool
+ * result reports a rejection, acknowledge it instead.
+ */
+async function mockPatchLlm(page: Page): Promise<void> {
+	await page.route('**/chat/completions', async (route) => {
+		const body = route.request().postDataJSON() as {
+			messages: { role: string; content?: string }[];
+		};
+		const toolResults = body.messages.filter((m) => m.role === 'tool');
+		let chunks: unknown[];
+		if (toolResults.length === 0) {
+			chunks = toolCallChunks('list_files', {});
+		} else if (toolResults.length === 1) {
+			const files = JSON.parse(toolResults[0].content ?? '[]') as { id: string }[];
+			chunks = toolCallChunks('patch_file', {
+				file_id: files[0].id,
+				patches: [{ search: 'plain prose', replace: 'brave new prose' }]
+			});
+		} else {
+			const rejected = (toolResults[1].content ?? '').includes('rejected');
+			chunks = [
+				chunk({
+					role: 'assistant',
+					content: rejected ? 'Understood, leaving the file as is.' : 'Edited the draft for you.'
+				}),
+				chunk({}, 'stop')
+			];
+		}
+		await route.fulfill({ contentType: 'text/event-stream', body: sse(chunks) });
+	});
+}
 
 test('logged out: shows the login pitch', async ({ page }) => {
 	await page.goto('/synthesize');
@@ -129,6 +213,77 @@ test('editor: version snapshots and wiki-links', async ({ page }) => {
 		.click({ modifiers: ['ControlOrMeta'] });
 	await expect(page.getByRole('tab', { name: /appendix\.md/ })).toBeVisible();
 	await expect(page.getByText('2 files')).toBeVisible();
+});
+
+test('agent: patch_file approval applies the edit to the open editor', async ({ page }) => {
+	await seedSettings(page, true);
+	await mockPatchLlm(page);
+	await seedLogin(page);
+	await page.goto('/synthesize');
+	await createProject(page, 'Agentic');
+
+	await createFile(page, 'draft');
+	await editorContent(page).click();
+	await page.keyboard.type('Some plain prose here.');
+	await page.waitForTimeout(700); // debounced flush
+
+	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await page.getByTestId('ws-chat-input').fill('Punch up the draft');
+	await page.keyboard.press('Enter');
+
+	// list_files runs unattended; patch_file stops at the approval banner.
+	await expect(page.getByTestId('approval-banner')).toBeVisible();
+	await expect(page.getByTestId('approval-banner')).toContainText('draft.md');
+	await expect(page.getByTestId('approval-banner')).toContainText('brave new prose');
+
+	await page.getByTestId('approve-patch').click();
+	await expect(page.getByTestId('ws-message-assistant')).toContainText('Edited the draft');
+
+	// The open editor shows the patched content (live-content update).
+	await expect(editorContent(page)).toContainText('brave new prose');
+
+	// Thread got titled from the first message.
+	await expect(page.getByRole('tab', { name: 'Punch up the draft' })).toBeVisible();
+});
+
+test('agent: rejecting a patch leaves the file untouched and informs the model', async ({
+	page
+}) => {
+	await seedSettings(page, true);
+	await mockPatchLlm(page);
+	await seedLogin(page);
+	await page.goto('/synthesize');
+	await createProject(page, 'Cautious');
+
+	await createFile(page, 'draft');
+	await editorContent(page).click();
+	await page.keyboard.type('Some plain prose here.');
+	await page.waitForTimeout(700);
+
+	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await page.getByTestId('ws-chat-input').fill('Punch up the draft');
+	await page.keyboard.press('Enter');
+
+	await expect(page.getByTestId('approval-banner')).toBeVisible();
+	await page.getByPlaceholder('Optional feedback if rejecting…').fill('too flowery');
+	await page.getByTestId('reject-patch').click();
+
+	await expect(page.getByTestId('ws-message-assistant')).toContainText('leaving the file as is');
+	await page.getByRole('tab', { name: /draft\.md/ }).click();
+	await expect(editorContent(page)).toContainText('plain prose');
+	await expect(editorContent(page)).not.toContainText('brave new prose');
+});
+
+test('agent: unconfigured chat points at the AI settings dialog', async ({ page }) => {
+	await seedSettings(page, false);
+	await seedLogin(page);
+	await page.goto('/synthesize');
+	await createProject(page, 'Unconfigured');
+
+	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await expect(page.getByText('No AI endpoint configured')).toBeVisible();
+	await page.getByRole('button', { name: 'Configure AI endpoint' }).click();
+	await expect(page.getByTestId('search-settings')).toBeVisible();
 });
 
 test('workspace: sources and chats', async ({ page }) => {

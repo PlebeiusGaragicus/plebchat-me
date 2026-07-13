@@ -10,6 +10,11 @@
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	// The AI endpoint config is shared across modes; its dialog lives with
+	// Search (searchUi.settingsOpen) — the workspace chat's "Configure AI
+	// endpoint" button opens it here too.
+	import SearchSettingsDialog from '$lib/search/components/SearchSettingsDialog.svelte';
+	import { searchUi } from '$lib/search/stores/ui.svelte.js';
 	import ProjectDashboard from '$lib/workspace/components/ProjectDashboard.svelte';
 	import WorkspaceView from '$lib/workspace/components/WorkspaceView.svelte';
 	import { projects } from '$lib/workspace/stores/projects.svelte.js';
@@ -55,4 +60,8 @@
 			onSelect={(p) => (projects.activeId = p.id)}
 		/>
 	{/if}
+{/if}
+
+{#if searchUi.settingsOpen}
+	<SearchSettingsDialog />
 {/if}

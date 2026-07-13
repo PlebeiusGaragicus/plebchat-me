@@ -5,7 +5,15 @@
 // relay and are verified manually (see docs/proposals/read-mode.md).
 import { test, expect } from '@playwright/test';
 import { CH1_TEXT, CH2_TEXT } from './fixtures/epub.js';
-import { importFixture, openFirstBook, seedLogin, selectBookText, waitForBookText } from './helpers.js';
+import {
+	bookBodyBackground,
+	bookHasText,
+	importFixture,
+	openFirstBook,
+	seedLogin,
+	selectBookText,
+	waitForBookText
+} from './helpers.js';
 
 test('logged out, /read shows the pitch instead of a library', async ({ page }) => {
 	await page.goto('/read');
@@ -46,14 +54,7 @@ test.describe('logged in', () => {
 		// crosses into chapter 2.
 		for (let i = 0; i < 30; i++) {
 			await page.keyboard.press('ArrowRight');
-			const found = await page.evaluate(
-				(t) =>
-					[...document.querySelectorAll('iframe')].some((f) =>
-						(f as HTMLIFrameElement).contentDocument?.body?.innerText.includes(t)
-					),
-				CH2_TEXT
-			);
-			if (found) break;
+			if (await bookHasText(page, CH2_TEXT)) break;
 			await page.waitForTimeout(150);
 		}
 		await waitForBookText(page, CH2_TEXT, 5000);
@@ -69,16 +70,7 @@ test.describe('logged in', () => {
 		await openFirstBook(page, CH1_TEXT);
 		await page.click('[data-testid="display-settings-toggle"]');
 		await page.click('[data-testid="reading-theme-dark"]');
-		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const frame = [...document.querySelectorAll('iframe')].find(
-						(f) => (f as HTMLIFrameElement).contentDocument?.body
-					) as HTMLIFrameElement;
-					return getComputedStyle(frame.contentDocument!.body).backgroundColor;
-				})
-			)
-			.toBe('rgb(24, 24, 27)'); // #18181b, the dark reading theme
+		await expect.poll(() => bookBodyBackground(page)).toBe('rgb(24, 24, 27)'); // #18181b, dark reading theme
 	});
 
 	test('progress resumes after a reload (deep-link mirror)', async ({ page }) => {

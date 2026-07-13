@@ -62,14 +62,15 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - **CI/Pages**: vibereader `.github/workflows/ci.yml` (check + build + `mkdocs build --strict`) and `deploy.yml` (recursive submodule checkout for cyphertap, `BASE_PATH`, upload-pages-artifact).
 - **Playwright e2e**: SvelteReader `frontend/playwright.config.ts` (chromium, dev-server webServer, trace/screenshot on failure) + `frontend/e2e/*.test.ts`; minimal variant in `vibereader/cyphertap/playwright.config.ts` (preview-server based).
 
-## Read-mode gotchas (inherited from vibereader — hard-won, do not relearn)
+## Read-mode gotchas (hard-won under epub.js and foliate — do not relearn)
 
-- **epub.js MUST be fed an ArrayBuffer**, never a URL (it 404s fetching internal archive paths). Blob from IndexedDB → `arrayBuffer()` → `ePub(buffer)`.
-- **Add annotations to the rendition only AFTER the first `rendered` event** — earlier crashes epub.js (`stepsToXpath`). The gate lives in `annotations.applyToRendition()`.
-- **Never sort CFIs lexically**; use `epub.compareCfi` (`new EpubCFI().compare`).
-- Live epub.js `Book`/`Rendition` objects are **plain module state in `src/lib/read/epub/service.ts`, never `$state`** — runes proxies break them. That file is the ONLY epub.js contact; keep it swappable (the foliate-js migration rewrites exactly it).
+- The renderer is **vendored foliate-js** (`src/lib/read/epub/vendor/foliate/`, pinned commit + local patches in `VENDORED.md`: open shadow roots for Playwright, pdf.js stub, paginator `goTo` waits out its navigation lock instead of dropping). Bump via fresh copy + re-apply patches.
+- **foliate relocates for non-navigation reasons** (resize, style application, anchor scrolls). `service.ts` dedupes by CFI before forwarding — consumers treat relocate as "the page turned" (progress save, selection clearing), and un-deduped relocates detach the annotation context menu mid-interaction.
+- **foliate parses XHTML strictly** (real XML). Malformed section markup renders only up to the first error — epub.js was lenient. Affects hand-built fixtures.
+- **Never sort CFIs lexically**; use `epub.compareCfi` (`CFI.compare`). Annotation positions are standard EPUB CFI strings — epub.js-era data (relay events from vibereader) resolves under foliate; verified with real annotations.
+- Live book/view objects are **plain module state in `src/lib/read/epub/service.ts`, never `$state`** — runes proxies break them. That file is the ONLY renderer contact; the exported contract survived a full renderer swap, keep it that way.
+- `annotations.applyToRendition()` still gates on first render (contract kept from the epub.js era; harmless under foliate, and the marks map must be populated before `create-overlay` replays).
 - ONE canonical camelCase data shape everywhere (`src/lib/db/types.ts` mirrors the nostr event content 1:1).
-- `epubjs` is CJS — it lives in `optimizeDeps.include`; extend that list if dev-mode mid-mount reloads reappear.
 - Blob stores (`bookFiles`, `covers`) use **raw put** — the JSON `clone()` used for `$state`-stripping destroys Blobs.
 - Reading theme (light/dark/sepia inside the book iframe, `rendition.themes`) is independent of app chrome theme (mode-watcher). Don't couple them.
 - The `?book=` deep-link mirror in `/read/+page.svelte` must stay gated on `handledInitialUrl` — the mount-time mirror otherwise erases the param before it's read.

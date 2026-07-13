@@ -25,38 +25,76 @@ export async function importFixture(page: Page, options: EpubFixtureOptions = {}
 	await page.waitForSelector('[data-testid="book-card"]', { state: 'visible' });
 }
 
-/** Wait until some epub iframe's body contains `text`. */
+// The renderer keeps its section iframes inside (open) shadow roots, so
+// document.querySelectorAll can't see them — walk shadow roots too. This
+// runs inside the page; keep it self-contained (no closures).
+const DEEP_IFRAMES = `(() => {
+	const out = [];
+	const walk = (root) => {
+		for (const el of root.querySelectorAll('*')) {
+			if (el.tagName === 'IFRAME') out.push(el);
+			if (el.shadowRoot) walk(el.shadowRoot);
+		}
+	};
+	walk(document);
+	return out;
+})()`;
+
+/** Whether any book iframe's body currently contains `text`. */
+export function bookHasText(page: Page, text: string): Promise<boolean> {
+	return page.evaluate(
+		({ finder, t }) =>
+			(eval(finder) as HTMLIFrameElement[]).some((f) =>
+				f.contentDocument?.body?.innerText.includes(t)
+			),
+		{ finder: DEEP_IFRAMES, t: text }
+	);
+}
+
+/** Computed background color of the visible book iframe's body. */
+export function bookBodyBackground(page: Page): Promise<string> {
+	return page.evaluate((finder) => {
+		const frame = (eval(finder) as HTMLIFrameElement[]).find((f) => f.contentDocument?.body);
+		if (!frame?.contentDocument) throw new Error('No book iframe');
+		return getComputedStyle(frame.contentDocument.body).backgroundColor;
+	}, DEEP_IFRAMES);
+}
+
+/** Wait until some book iframe's body contains `text`. */
 export async function waitForBookText(page: Page, text: string, timeout = 15000): Promise<void> {
 	await page.waitForFunction(
-		(t) =>
-			[...document.querySelectorAll('iframe')].some((f) =>
-				(f as HTMLIFrameElement).contentDocument?.body?.innerText.includes(t)
+		({ finder, t }) =>
+			(eval(finder) as HTMLIFrameElement[]).some((f) =>
+				f.contentDocument?.body?.innerText.includes(t)
 			),
-		text,
+		{ finder: DEEP_IFRAMES, t: text },
 		{ timeout }
 	);
 }
 
 /**
- * Select a paragraph containing `text` inside the epub iframe and fire
- * mouseup so epub.js emits 'selected' (opens the annotation context menu).
+ * Select a paragraph containing `text` inside the book iframe and fire
+ * mouseup so the renderer reports a selection (opens the annotation menu).
  */
 export async function selectBookText(page: Page, text: string): Promise<void> {
-	await page.evaluate((t) => {
-		const frame = [...document.querySelectorAll('iframe')].find((f) =>
-			(f as HTMLIFrameElement).contentDocument?.body?.innerText.includes(t)
-		) as HTMLIFrameElement | undefined;
-		if (!frame?.contentDocument) throw new Error(`No iframe containing: ${t}`);
-		const doc = frame.contentDocument;
-		const p = [...doc.querySelectorAll('p')].find((el) => el.textContent?.includes(t));
-		if (!p) throw new Error(`No paragraph containing: ${t}`);
-		const range = doc.createRange();
-		range.selectNodeContents(p);
-		const sel = doc.getSelection();
-		sel?.removeAllRanges();
-		sel?.addRange(range);
-		p.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-	}, text);
+	await page.evaluate(
+		({ finder, t }) => {
+			const frame = (eval(finder) as HTMLIFrameElement[]).find((f) =>
+				f.contentDocument?.body?.innerText.includes(t)
+			);
+			if (!frame?.contentDocument) throw new Error(`No iframe containing: ${t}`);
+			const doc = frame.contentDocument;
+			const p = [...doc.querySelectorAll('p')].find((el) => el.textContent?.includes(t));
+			if (!p) throw new Error(`No paragraph containing: ${t}`);
+			const range = doc.createRange();
+			range.selectNodeContents(p);
+			const sel = doc.getSelection();
+			sel?.removeAllRanges();
+			sel?.addRange(range);
+			p.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+		},
+		{ finder: DEEP_IFRAMES, t: text }
+	);
 	await page.waitForSelector('[data-testid="annotation-menu"]', { state: 'visible' });
 }
 

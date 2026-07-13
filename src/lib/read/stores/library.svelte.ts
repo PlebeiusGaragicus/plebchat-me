@@ -4,7 +4,7 @@
 import { toast } from 'svelte-sonner';
 import { db } from '$lib/db/index.js';
 import type { Book } from '$lib/db/types.js';
-import { DuplicateBookError, importEpubFile } from '$lib/read/epub/import.js';
+import { DuplicateBookError, importEpubFile, SUPPORTED_EXTENSIONS } from '$lib/read/epub/import.js';
 import { reader } from './reader.svelte.js';
 import { ui } from './ui.svelte.js';
 
@@ -54,8 +54,8 @@ async function importFiles(files: Iterable<File>): Promise<void> {
 	importing = true;
 	try {
 		for (const file of files) {
-			if (!/\.epub$/i.test(file.name)) {
-				toast.error(`Not an EPUB: ${file.name}`);
+			if (!SUPPORTED_EXTENSIONS.test(file.name)) {
+				toast.error(`Unsupported format: ${file.name}`);
 				continue;
 			}
 			try {

@@ -1,8 +1,13 @@
-// The only module that touches epub.js. Live Book/Rendition objects are plain
-// module state — never $state (proxies break them) — and every quirk of the
-// (unmaintained) library is contained here so it stays swappable.
+// The only module that touches the book renderer (vendored foliate-js —
+// see vendor/foliate/VENDORED.md). Live book/view objects are plain module
+// state — never $state (proxies break them) — and every renderer quirk is
+// contained here so it stays swappable. The exported contract predates the
+// renderer: it is unchanged from the epub.js era, and annotation positions
+// are standard EPUB CFI strings, so data created under epub.js resolves here.
 
-import ePub, { Book as EpubBook, EpubCFI, Rendition } from 'epubjs';
+import { makeBook } from './vendor/foliate/view.js';
+import * as CFI from './vendor/foliate/epubcfi.js';
+import { Overlayer } from './vendor/foliate/overlayer.js';
 import { db } from '$lib/db/index.js';
 import type { Annotation, HighlightColor } from '$lib/db/types.js';
 import type { ReadingSettings } from '$lib/stores/settings.svelte.js';
@@ -20,7 +25,7 @@ export interface SelectionInfo {
 	rect: DOMRect;
 }
 
-// Saturated marks + multiply blending reads well on all three reading themes.
+// Saturated marks read well on all three reading themes.
 export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
 	yellow: 'rgba(255, 224, 0, 0.45)',
 	green: 'rgba(0, 216, 100, 0.4)',
@@ -29,17 +34,60 @@ export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
 	purple: 'rgba(168, 85, 247, 0.4)'
 };
 const NOTE_UNDERLINE = 'rgb(220, 38, 38)';
+// Other readers' shared highlights: dashed sky underline — read-only marks,
+// visually distinct from own highlights (fill) and own notes (solid red).
+const FOREIGN_UNDERLINE = 'rgb(14, 165, 233)';
 
-const READING_THEMES: Record<ReadingSettings['theme'], Record<string, Record<string, string>>> = {
-	light: { body: { background: '#ffffff', color: '#1c1917' } },
-	dark: { body: { background: '#18181b', color: '#d4d4d8' } },
-	sepia: { body: { background: '#f4ecd8', color: '#5b4636' } }
+const READING_THEMES: Record<ReadingSettings['theme'], { background: string; color: string }> = {
+	light: { background: '#ffffff', color: '#1c1917' },
+	dark: { background: '#18181b', color: '#d4d4d8' },
+	sepia: { background: '#f4ecd8', color: '#5b4636' }
 };
 
-let book: EpubBook | null = null;
-let rendition: Rendition | null = null;
-let currentSha: string | null = null;
+// Minimal typed surface over the untyped vendored View element.
+interface FoliateView extends HTMLElement {
+	open(book: unknown): Promise<void>;
+	close(): void;
+	init(opts: { lastLocation?: string | null }): Promise<void>;
+	goTo(target: string | number): Promise<unknown>;
+	next(): Promise<void>;
+	prev(): Promise<void>;
+	deselect(): void;
+	getCFI(index: number, range: Range): string;
+	addAnnotation(a: { value: string }, remove?: boolean): Promise<unknown>;
+	deleteAnnotation(a: { value: string }): Promise<unknown>;
+	renderer: HTMLElement & { setStyles(css: string): void };
+	book: FoliateBook;
+}
+
+interface FoliateBook {
+	metadata?: Record<string, unknown>;
+	toc?: FoliateTocItem[];
+	getCover?(): Promise<Blob | null>;
+	destroy?(): void;
+}
+
+interface FoliateTocItem {
+	label: string;
+	href: string;
+	subitems?: FoliateTocItem[];
+}
+
+/** What we know about a mark we put on the overlay, keyed by CFI range. */
+type MarkMeta =
+	| { kind: 'highlight'; id: string; color: HighlightColor }
+	| { kind: 'note'; id: string }
+	| { kind: 'foreign'; id: string };
+
+let book: FoliateBook | null = null;
+let view: FoliateView | null = null;
+let opened: Promise<void> | null = null;
+let initialized = false;
 let hasRendered = false;
+let lastFraction: number | undefined;
+let lastCfi: string | null = null;
+let pendingSettings: ReadingSettings | null = null;
+const marks = new Map<string, MarkMeta>();
 
 let selectionCb: ((sel: SelectionInfo) => void) | null = null;
 let markClickCb: ((id: string, rect: DOMRect | null) => void) | null = null;
@@ -47,116 +95,165 @@ let relocatedCb: ((loc: { cfi: string; href?: string; percentage?: number }) => 
 	null;
 let renderedCb: (() => void) | null = null;
 
-function requireBook(): EpubBook {
-	if (!book) throw new Error('No book open');
-	return book;
-}
-
 export async function openBook(sha256: string): Promise<void> {
 	destroy();
 	const record = await db.bookFiles.get(sha256);
 	if (!record) throw new Error('Book file missing from local storage');
-	// epub.js MUST get an ArrayBuffer — handing it a URL makes it 404 fetching
-	// internal archive paths.
-	const buffer = await record.blob.arrayBuffer();
-	book = ePub(buffer);
-	currentSha = sha256;
-	await book.ready;
+	const file = new File([record.blob], 'book.epub', {
+		type: record.blob.type || 'application/epub+zip'
+	});
+	book = (await makeBook(file)) as FoliateBook;
 }
 
 export function renderTo(container: HTMLElement, settings: ReadingSettings): void {
-	const b = requireBook();
-	rendition = b.renderTo(container, {
-		width: '100%',
-		height: '100%',
-		flow: 'paginated',
-		spread: 'auto',
-		allowScriptedContent: false
-	});
+	if (!book) throw new Error('No book open');
+	const v = document.createElement('foliate-view') as FoliateView;
+	view = v;
+	pendingSettings = settings;
+	v.style.width = '100%';
+	v.style.height = '100%';
+	v.style.display = 'block';
 
-	for (const [name, styles] of Object.entries(READING_THEMES)) {
-		rendition.themes.register(name, styles);
-	}
-	applyDisplaySettings(settings);
-
-	rendition.on('rendered', () => {
+	v.addEventListener('load', (e) => {
+		const { doc, index } = (e as CustomEvent<{ doc: Document; index: number }>).detail;
+		attachSelectionHandler(doc, index);
 		const first = !hasRendered;
 		hasRendered = true;
 		if (first) renderedCb?.();
 	});
 
-	rendition.on('relocated', (location: { start: { cfi: string; href: string } }) => {
-		const cfi = location.start.cfi;
+	v.addEventListener('relocate', (e) => {
+		const detail = (e as CustomEvent<{ cfi: string; fraction?: number; tocItem?: { href?: string } }>)
+			.detail;
+		lastFraction = detail.fraction;
+		// foliate relocates for non-navigation reasons too (resize, style
+		// application, anchor scrolls). Consumers treat relocate as "the page
+		// turned" (progress save, selection clearing) — only forward real moves.
+		if (detail.cfi === lastCfi) return;
+		lastCfi = detail.cfi;
 		relocatedCb?.({
-			cfi,
-			href: location.start.href,
-			percentage: percentageFromCfi(cfi)
+			cfi: detail.cfi,
+			href: detail.tocItem?.href,
+			percentage: detail.fraction
 		});
 	});
 
-	rendition.on('selected', (cfiRange: string, contents: EpubContents) => {
-		const sel = contents.window.getSelection();
-		if (!sel || sel.rangeCount === 0) return;
-		const text = sel.toString().trim();
-		if (!text) return;
-		const rect = toViewportRect(sel.getRangeAt(0).getBoundingClientRect(), contents);
-		if (rect) selectionCb?.({ cfiRange, text, rect });
+	// The overlay for a section is created when that section loads — re-add
+	// every registered mark; ones outside the section are no-ops.
+	v.addEventListener('create-overlay', () => {
+		for (const cfi of marks.keys()) void v.addAnnotation({ value: cfi });
 	});
 
-	rendition.on(
-		'markClicked',
-		(cfiRange: string, data: { id?: string } | undefined, contents: EpubContents) => {
-			if (!data?.id) return;
-			let rect: DOMRect | null = null;
-			try {
-				rect = toViewportRect(contents.range(cfiRange).getBoundingClientRect(), contents);
-			} catch {
-				// Positioning is best-effort; the sidebar path still works.
-			}
-			markClickCb?.(data.id, rect);
+	v.addEventListener('draw-annotation', (e) => {
+		const { draw, annotation } = (
+			e as CustomEvent<{
+				draw: (fn: unknown, opts?: unknown) => void;
+				annotation: { value: string };
+			}>
+		).detail;
+		const meta = marks.get(annotation.value);
+		if (!meta) return;
+		if (meta.kind === 'highlight') {
+			draw(Overlayer.highlight, { color: HIGHLIGHT_COLORS[meta.color] });
+		} else if (meta.kind === 'note') {
+			draw(Overlayer.underline, { color: NOTE_UNDERLINE, width: 2 });
+		} else {
+			draw(dashedUnderline, { color: FOREIGN_UNDERLINE, width: 2 });
 		}
-	);
+	});
+
+	// A click on an existing mark (the overlayer hit test).
+	v.addEventListener('show-annotation', (e) => {
+		const { value, range } = (e as CustomEvent<{ value: string; range?: Range }>).detail;
+		const meta = marks.get(value);
+		if (!meta || meta.kind === 'foreign') return;
+		markClickCb?.(meta.id, range ? toViewportRect(range) : null);
+	});
+
+	container.append(v);
+	opened = v.open(book).then(() => {
+		if (pendingSettings) applyDisplaySettings(pendingSettings);
+	});
 }
 
-// epub.js Contents — typed loosely here; its shipped types miss what we use.
-interface EpubContents {
-	window: Window;
-	range(cfi: string): Range;
+/** Custom overlay draw: dashed underline for other readers' highlights. */
+function dashedUnderline(
+	rects: { left: number; bottom: number; width: number }[],
+	options: { color?: string; width?: number } = {}
+): SVGElement {
+	const { color = 'red', width: strokeWidth = 2 } = options;
+	const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+	g.setAttribute('class', 'vr-foreign-underline');
+	g.setAttribute('stroke', color);
+	g.setAttribute('stroke-width', String(strokeWidth));
+	g.setAttribute('stroke-dasharray', '3 2');
+	for (const { left, bottom, width } of rects) {
+		const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+		line.setAttribute('x1', String(left));
+		line.setAttribute('x2', String(left + width));
+		line.setAttribute('y1', String(bottom - strokeWidth / 2));
+		line.setAttribute('y2', String(bottom - strokeWidth / 2));
+		g.append(line);
+	}
+	return g;
 }
 
-/** Translate an in-iframe rect to viewport coords via the emitting iframe. */
-function toViewportRect(rect: DOMRect, contents: EpubContents): DOMRect | null {
-	const frame = contents.window.frameElement;
+function attachSelectionHandler(doc: Document, index: number): void {
+	doc.addEventListener('mouseup', () => {
+		const sel = doc.getSelection();
+		if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+		const text = sel.toString().trim();
+		if (!text || !view) return;
+		const range = sel.getRangeAt(0);
+		let cfiRange: string;
+		try {
+			cfiRange = view.getCFI(index, range);
+		} catch {
+			return;
+		}
+		const rect = toViewportRect(range);
+		if (rect) selectionCb?.({ cfiRange, text, rect });
+	});
+}
+
+/** Translate an in-iframe rect to viewport coords via the owning iframe. */
+function toViewportRect(range: Range): DOMRect | null {
+	const rect = range.getBoundingClientRect();
+	const frame = range.startContainer.ownerDocument?.defaultView?.frameElement;
 	if (!frame) return rect;
 	const frameRect = frame.getBoundingClientRect();
 	return new DOMRect(frameRect.left + rect.left, frameRect.top + rect.top, rect.width, rect.height);
 }
 
 export async function display(target?: string): Promise<void> {
-	if (!rendition) return;
-	// display(undefined) !== display() to epub.js — be explicit.
-	if (target) await rendition.display(target);
-	else await rendition.display();
+	if (!view || !opened) return;
+	await opened;
+	if (!initialized) {
+		initialized = true;
+		await view.init({ lastLocation: target ?? null });
+		return;
+	}
+	if (target) await view.goTo(target);
 }
 
 export function next(): void {
-	void rendition?.next();
+	void view?.next();
 }
 
 export function prev(): void {
-	void rendition?.prev();
+	void view?.prev();
 }
 
 export function getToc(): TocEntry[] {
-	const b = requireBook();
+	if (!book) throw new Error('No book open');
 	const entries: TocEntry[] = [];
-	const walk = (items: { label: string; href: string; subitems?: unknown[] }[], depth: number) => {
+	const walk = (items: FoliateTocItem[], depth: number) => {
 		for (const item of items) {
-			entries.push({ label: item.label.trim(), href: item.href, depth });
-			if (item.subitems?.length) walk(item.subitems as typeof items, depth + 1);
+			entries.push({ label: (item.label ?? '').trim(), href: item.href, depth });
+			if (item.subitems?.length) walk(item.subitems, depth + 1);
 		}
 	};
-	walk(b.navigation?.toc ?? [], 0);
+	walk(book.toc ?? [], 0);
 	return entries;
 }
 
@@ -166,38 +263,14 @@ export function sectionLabelFor(href: string | undefined): string | undefined {
 	return getToc().find((t) => t.href.split('#')[0] === plain)?.label;
 }
 
-// ---- locations (pagination cache) ----
+// ---- progress ----
 
-let locationsReady = false;
+/** foliate computes overall progress natively (relocate carries `fraction`) —
+ * the epub.js locations cache is gone; this resolves immediately. */
+export async function ensureLocations(): Promise<void> {}
 
-export async function ensureLocations(): Promise<void> {
-	const b = requireBook();
-	const sha = currentSha!;
-	locationsReady = false;
-	const cached = await db.locations.get(sha);
-	if (cached) {
-		b.locations.load(cached.locationsJson);
-	} else {
-		await b.locations.generate(1024);
-		// The book may have been closed while we generated.
-		if (book !== b) return;
-		await db.locations.save({
-			sha256: sha,
-			locationsJson: b.locations.save(),
-			charsPerLocation: 1024,
-			generatedAt: Date.now()
-		});
-	}
-	if (book === b) locationsReady = true;
-}
-
-export function percentageFromCfi(cfi: string): number | undefined {
-	if (!locationsReady || !book) return undefined;
-	try {
-		return book.locations.percentageFromCfi(cfi);
-	} catch {
-		return undefined;
-	}
+export function percentageFromCfi(_cfi: string): number | undefined {
+	return lastFraction;
 }
 
 // ---- annotations ----
@@ -205,74 +278,48 @@ export function percentageFromCfi(cfi: string): number | undefined {
 /** Never sort CFIs lexically — parse and compare properly. */
 export function compareCfi(a: string, b: string): number {
 	try {
-		return new EpubCFI().compare(a, b);
+		return CFI.compare(a, b) as number;
 	} catch {
 		return 0;
 	}
 }
 
 export function applyAnnotation(anno: Annotation): void {
-	if (!rendition) return;
-	if (anno.color) {
-		rendition.annotations.add(
-			'highlight',
-			anno.cfiRange,
-			{ id: anno.id },
-			undefined,
-			'vr-highlight',
-			{
-				fill: HIGHLIGHT_COLORS[anno.color],
-				'fill-opacity': '1',
-				'mix-blend-mode': 'multiply'
-			}
-		);
-	} else {
-		rendition.annotations.add(
-			'underline',
-			anno.cfiRange,
-			{ id: anno.id },
-			undefined,
-			'vr-note-underline',
-			{ stroke: NOTE_UNDERLINE, 'stroke-opacity': '0.9' }
-		);
-	}
+	if (!view) return;
+	marks.set(
+		anno.cfiRange,
+		anno.color
+			? { kind: 'highlight', id: anno.id, color: anno.color }
+			: { kind: 'note', id: anno.id }
+	);
+	void view.addAnnotation({ value: anno.cfiRange });
 }
 
 export function removeAnnotation(anno: Annotation): void {
-	if (!rendition) return;
-	// Type must match what applyAnnotation used for this record.
-	rendition.annotations.remove(anno.cfiRange, anno.color ? 'highlight' : 'underline');
+	if (!view) return;
+	marks.delete(anno.cfiRange);
+	void view.deleteAnnotation({ value: anno.cfiRange });
 }
 
-// Other readers' shared highlights: dashed sky underline — read-only marks,
-// visually distinct from own highlights (fill) and own notes (solid red).
-const FOREIGN_UNDERLINE = 'rgb(14, 165, 233)';
-
 export function applyForeignAnnotation(anno: { id: string; cfiRange: string }): void {
-	if (!rendition || !hasRendered) return; // Pre-render add crashes epub.js.
-	rendition.annotations.add(
-		'underline',
-		anno.cfiRange,
-		{ id: anno.id, foreign: true },
-		undefined,
-		'vr-foreign-underline',
-		{ stroke: FOREIGN_UNDERLINE, 'stroke-opacity': '0.8', 'stroke-dasharray': '3 2' }
-	);
+	if (!view || !hasRendered) return;
+	// Own marks win if both target the same range.
+	if (marks.has(anno.cfiRange)) return;
+	marks.set(anno.cfiRange, { kind: 'foreign', id: anno.id });
+	void view.addAnnotation({ value: anno.cfiRange });
 }
 
 export function removeForeignAnnotation(anno: { cfiRange: string }): void {
-	if (!rendition) return;
-	rendition.annotations.remove(anno.cfiRange, 'underline');
+	if (!view) return;
+	const meta = marks.get(anno.cfiRange);
+	if (meta?.kind !== 'foreign') return;
+	marks.delete(anno.cfiRange);
+	void view.deleteAnnotation({ value: anno.cfiRange });
 }
 
 export function clearSelection(): void {
-	// epub.js keeps the selection inside the section iframe.
-	if (!rendition) return;
 	try {
-		// @ts-expect-error getContents() is missing from the shipped types
-		for (const contents of rendition.getContents() as EpubContents[]) {
-			contents.window.getSelection()?.removeAllRanges();
-		}
+		view?.deselect();
 	} catch {
 		// Best-effort.
 	}
@@ -281,11 +328,24 @@ export function clearSelection(): void {
 // ---- display settings ----
 
 export function applyDisplaySettings(s: ReadingSettings): void {
-	if (!rendition) return;
-	rendition.themes.select(s.theme);
-	rendition.themes.fontSize(`${s.fontSize}px`);
-	if (s.fontFamily) rendition.themes.font(s.fontFamily);
-	rendition.themes.override('line-height', String(s.lineHeight));
+	pendingSettings = s;
+	if (!view?.renderer?.setStyles) return;
+	const theme = READING_THEMES[s.theme];
+	view.renderer.setStyles(`
+		html, body {
+			background: ${theme.background} !important;
+			color: ${theme.color} !important;
+		}
+		html {
+			font-size: ${s.fontSize}px !important;
+			line-height: ${s.lineHeight} !important;
+			${s.fontFamily ? `font-family: ${s.fontFamily} !important;` : ''}
+		}
+		p {
+			line-height: ${s.lineHeight} !important;
+			${s.fontFamily ? `font-family: ${s.fontFamily} !important;` : ''}
+		}
+	`);
 }
 
 // ---- lifecycle & callbacks ----
@@ -306,15 +366,25 @@ export function onFirstRendered(cb: typeof renderedCb): void {
 
 export function destroy(): void {
 	try {
-		book?.destroy();
+		view?.close();
+		view?.remove();
 	} catch {
-		// epub.js can throw on double-destroy; we're discarding anyway.
+		// Discarding anyway.
+	}
+	try {
+		book?.destroy?.();
+	} catch {
+		// Discarding anyway.
 	}
 	book = null;
-	rendition = null;
-	currentSha = null;
+	view = null;
+	opened = null;
+	initialized = false;
 	hasRendered = false;
-	locationsReady = false;
+	lastFraction = undefined;
+	lastCfi = null;
+	pendingSettings = null;
+	marks.clear();
 	selectionCb = null;
 	markClickCb = null;
 	relocatedCb = null;

@@ -4,11 +4,6 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	optimizeDeps: {
-		// epub.js is CJS with CJS deps — pre-bundle so the first reader mount
-		// in dev doesn't trigger a mid-mount optimize reload.
-		include: ['epubjs']
-	},
 	server: {
 		fs: {
 			// cyphertap resolves through the node_modules symlink, but Vite

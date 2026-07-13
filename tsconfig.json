@@ -3,7 +3,9 @@
 	"compilerOptions": {
 		"rewriteRelativeImportExtensions": true,
 		"allowJs": true,
-		"checkJs": true,
+		// Vendored foliate-js (src/lib/read/epub/vendor/) is plain JS and not
+		// type-checked; all first-party code is TS, so nothing else is affected.
+		"checkJs": false,
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,

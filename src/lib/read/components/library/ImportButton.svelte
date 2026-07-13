@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Loader2, Plus } from '@lucide/svelte';
+	import { IMPORT_ACCEPT } from '$lib/read/epub/import.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
 
 	let input: HTMLInputElement | undefined = $state();
@@ -8,7 +9,7 @@
 <input
 	bind:this={input}
 	type="file"
-	accept=".epub,application/epub+zip"
+	accept={IMPORT_ACCEPT}
 	multiple
 	class="hidden"
 	onchange={(e) => {

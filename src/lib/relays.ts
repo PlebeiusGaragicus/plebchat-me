@@ -11,6 +11,6 @@
  * Note: mints only apply when a NEW NIP-60 wallet is created — an existing
  * wallet keeps the mint list from its own wallet event.
  */
-export const RELAYS = ['wss://relay.abvstudio.net'];
+export const RELAYS = ['wss://relay.abvstudio.net', 'wss://relay.primal.net'];
 
 export const MINTS = ['https://nofee.testnut.cashu.space'];

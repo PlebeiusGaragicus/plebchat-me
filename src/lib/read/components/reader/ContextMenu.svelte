@@ -1,10 +1,10 @@
 <script lang="ts">
-	// PORT NOTE (Phase 2): the "Chat about this" action returns in Phase 4.
-	import { Copy, Trash2 } from '@lucide/svelte';
+	import { Copy, MessageSquare, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import type { HighlightColor } from '$lib/db/types.js';
 	import { HIGHLIGHT_COLORS, clearSelection } from '$lib/read/epub/service.js';
 	import { annotations } from '$lib/read/stores/annotations.svelte.js';
+	import { chat } from '$lib/read/stores/chat.svelte.js';
 	import { selection } from '$lib/read/stores/selection.svelte.js';
 
 	const COLORS = Object.keys(HIGHLIGHT_COLORS) as HighlightColor[];
@@ -102,6 +102,22 @@
 			{/each}
 		</div>
 		<div class="flex gap-1">
+			<button
+				data-testid="chat-about-this"
+				class="rounded p-1.5 text-muted-foreground hover:bg-accent"
+				title="Chat about this"
+				onclick={() => {
+					const context = editing
+						? { cfiRange: editing.cfiRange, quote: editing.quote }
+						: selection.active
+							? { cfiRange: selection.active.cfiRange, quote: selection.active.text }
+							: null;
+					if (context) chat.startFromSelection(context);
+					close();
+				}}
+			>
+				<MessageSquare class="size-4" />
+			</button>
 			<button
 				class="rounded p-1.5 text-muted-foreground hover:bg-accent"
 				title="Copy text"

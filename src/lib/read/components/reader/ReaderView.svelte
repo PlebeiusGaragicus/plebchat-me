@@ -1,7 +1,7 @@
 <script lang="ts">
-	// PORT NOTE (Phase 2): ChatPanel mounts here again in Phase 4.
 	import { reader } from '$lib/read/stores/reader.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
+	import ChatPanel from '$lib/read/components/chat/ChatPanel.svelte';
 	import AnnotationSidebar from './AnnotationSidebar.svelte';
 	import EpubViewer from './EpubViewer.svelte';
 	import ReaderToolbar from './ReaderToolbar.svelte';
@@ -25,6 +25,9 @@
 		</div>
 		{#if ui.annotationsOpen}
 			<AnnotationSidebar />
+		{/if}
+		{#if ui.chatOpen}
+			<ChatPanel />
 		{/if}
 	</div>
 </div>

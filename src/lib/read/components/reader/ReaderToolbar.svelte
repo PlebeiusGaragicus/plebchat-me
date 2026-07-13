@@ -1,6 +1,5 @@
 <script lang="ts">
-	// PORT NOTE (Phase 2): the Chat toggle returns in Phase 4.
-	import { ArrowLeft, Highlighter, List, Type } from '@lucide/svelte';
+	import { ArrowLeft, Highlighter, List, MessageSquare, Type } from '@lucide/svelte';
 	import { reader } from '$lib/read/stores/reader.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
 	import DisplaySettings from './DisplaySettings.svelte';
@@ -58,5 +57,13 @@
 		onclick={() => (ui.annotationsOpen = !ui.annotationsOpen)}
 	>
 		<Highlighter class="size-4" />
+	</button>
+	<button
+		data-testid="chat-toggle"
+		class="rounded p-1.5 hover:bg-accent {ui.chatOpen ? 'text-primary' : ''}"
+		title="Chat"
+		onclick={() => (ui.chatOpen = !ui.chatOpen)}
+	>
+		<MessageSquare class="size-4" />
 	</button>
 </div>

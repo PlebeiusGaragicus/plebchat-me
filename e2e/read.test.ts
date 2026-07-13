@@ -177,6 +177,49 @@ test.describe('logged in', () => {
 		await expect(page.getByTestId('ai-base-url')).toHaveValue('http://localhost:1234/v1');
 	});
 
+	test('chat panel opens; unconfigured state points at Settings', async ({ page }) => {
+		await importFixture(page);
+		await openFirstBook(page, CH1_TEXT);
+		await page.click('[data-testid="chat-toggle"]');
+		await expect(page.getByTestId('chat-panel')).toBeVisible();
+		await expect(page.getByTestId('chat-panel')).toContainText('No AI endpoint configured');
+	});
+
+	test('chat roundtrip against a mocked endpoint', async ({ page }) => {
+		// Any OpenAI-compatible /chat/completions shape works; intercept it.
+		await page.route('**/chat/completions', async (route) => {
+			await route.fulfill({
+				contentType: 'application/json',
+				body: JSON.stringify({
+					choices: [{ message: { content: 'A mocked reading companion reply.' } }]
+				})
+			});
+		});
+
+		// Configure the endpoint (non-streaming so the single-shot path runs).
+		await page.click('[data-testid="read-settings-toggle"]');
+		await page.fill('[data-testid="ai-base-url"]', 'https://mock.invalid/v1');
+		await page.fill('[data-testid="read-settings"] input[placeholder^="e.g."]', 'mock-model');
+		await page.getByText('Stream responses').click();
+		await page.click('[data-testid="settings-save"]');
+
+		await importFixture(page);
+		await openFirstBook(page, CH1_TEXT);
+
+		// "Chat about this" from a selection carries the passage as context.
+		await selectBookText(page, CH1_TEXT);
+		await page.click('[data-testid="chat-about-this"]');
+		await expect(page.getByTestId('chat-panel')).toBeVisible();
+		await expect(page.getByTestId('chat-panel')).toContainText('Alpha fixture');
+
+		await page.fill('[data-testid="chat-input"]', 'What does this passage mean?');
+		await page.click('[data-testid="chat-send"]');
+		await expect(page.getByTestId('chat-message-user')).toContainText('What does this passage mean?');
+		await expect(page.getByTestId('chat-message-assistant')).toContainText(
+			'A mocked reading companion reply.'
+		);
+	});
+
 	test('reader hides the shell TopBar (immersive), library restores it', async ({ page }) => {
 		await importFixture(page);
 		await openFirstBook(page, CH1_TEXT);

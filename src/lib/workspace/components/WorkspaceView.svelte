@@ -63,9 +63,16 @@
 		})();
 	});
 
-	// Unmount only (no reactive deps): clear the per-project stores.
+	// Unmount only (no reactive deps): flush unsaved edits (the editors'
+	// onDestroy already flushed — belt and braces), then clear the
+	// per-project stores. flush() captures its data synchronously, so the
+	// resets can follow without racing the awaited db writes.
 	$effect(() => {
+		const flushPending = () => void artifacts.flushAll();
+		window.addEventListener('beforeunload', flushPending);
 		return () => {
+			window.removeEventListener('beforeunload', flushPending);
+			void artifacts.flushAll();
 			artifacts.reset();
 			wsThreads.reset();
 			sources.reset();

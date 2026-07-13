@@ -50,29 +50,35 @@ test('project lifecycle: create, deep-link, rename, delete', async ({ page }) =>
 	await expect(page.getByText('No projects yet')).toBeVisible();
 });
 
+/** Create a file via the sidebar and wait for its editor tab. */
+async function createFile(page: Page, name: string): Promise<void> {
+	await page.getByRole('button', { name: 'New file', exact: true }).click();
+	await page.getByPlaceholder('filename.md').fill(name);
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('tab', { name: new RegExp(`${name}\\.md`) })).toBeVisible();
+}
+
+const editorContent = (page: Page) => page.locator('[data-testid="artifact-editor"] .cm-content');
+
 test('workspace: files, tabs, editing, and persistence', async ({ page }) => {
 	await seedLogin(page);
 	await page.goto('/synthesize');
 	await createProject(page, 'Essay');
 
-	// Create a file from the sidebar; it opens as a left tab with a textarea.
-	await page.getByRole('button', { name: 'New file', exact: true }).click();
-	await page.getByPlaceholder('filename.md').fill('draft');
-	await page.keyboard.press('Enter');
-	await expect(page.getByRole('tab', { name: /draft\.md/ })).toBeVisible();
-	await page.getByPlaceholder('Start writing…').fill('# Hello synthesis');
+	// Create a file from the sidebar; it opens as a left tab with the editor.
+	await createFile(page, 'draft');
+	await editorContent(page).click();
+	await page.keyboard.type('# Hello synthesis');
+	// Live preview renders the heading (the "# " marker text stays while the line is active).
+	await expect(editorContent(page).locator('.cm-header-1')).toBeVisible();
 
 	// Second file opens in the RIGHT column (left occupied → split).
-	await page.getByRole('button', { name: 'New file', exact: true }).click();
-	await page.getByPlaceholder('filename.md').fill('notes');
-	await page.keyboard.press('Enter');
-	await expect(page.getByRole('tab', { name: /notes\.md/ })).toBeVisible();
-	// Both panes visible: two textareas.
-	await expect(page.getByPlaceholder('Start writing…')).toHaveCount(2);
+	await createFile(page, 'notes');
+	await expect(editorContent(page)).toHaveCount(2);
 
 	// Close the right panel: tabs fold into the left column.
 	await page.getByTitle('Close panel').click();
-	await expect(page.getByPlaceholder('Start writing…')).toHaveCount(1);
+	await expect(editorContent(page)).toHaveCount(1);
 	await expect(page.getByRole('tab', { name: /draft\.md/ })).toBeVisible();
 	await expect(page.getByRole('tab', { name: /notes\.md/ })).toBeVisible();
 
@@ -81,10 +87,48 @@ test('workspace: files, tabs, editing, and persistence', async ({ page }) => {
 	await page.reload();
 	await expect(page.getByRole('tab', { name: /notes\.md/ })).toBeVisible();
 	await page.getByRole('tab', { name: /draft\.md/ }).click();
-	await expect(page.getByPlaceholder('Start writing…')).toHaveValue('# Hello synthesis');
+	await expect(editorContent(page)).toContainText('Hello synthesis');
 
 	// Footer counts.
 	await expect(page.getByText('0 chats · 2 files · 0 sources')).toBeVisible();
+});
+
+test('editor: version snapshots and wiki-links', async ({ page }) => {
+	await seedLogin(page);
+	await page.goto('/synthesize');
+	await createProject(page, 'Versioned');
+
+	await createFile(page, 'main');
+	await editorContent(page).click();
+	await page.keyboard.type('First draft.');
+	await expect(page.getByTestId('version-indicator')).toHaveText('v1/1');
+
+	// Snapshot → v2 carries the content; further edits stay on v2.
+	await page.getByRole('button', { name: 'Snapshot as new version' }).click();
+	await expect(page.getByTestId('version-indicator')).toHaveText('v2/2');
+	await editorContent(page).click();
+	await page.keyboard.press('End');
+	await page.keyboard.type(' Second thoughts.');
+	await page.waitForTimeout(700); // debounced flush
+
+	// Navigate back: v1 shows the pre-snapshot content, v2 the edited one.
+	await page.getByRole('button', { name: 'Previous version' }).click();
+	await expect(page.getByTestId('version-indicator')).toHaveText('v1/2');
+	await expect(editorContent(page)).not.toContainText('Second thoughts');
+	await page.getByRole('button', { name: 'Next version' }).click();
+	await expect(editorContent(page)).toContainText('Second thoughts.');
+
+	// A [[wiki-link]] is decorated; Cmd/Ctrl+click creates and opens the target.
+	await editorContent(page).click();
+	await page.keyboard.press('End');
+	await page.keyboard.type(' See [[appendix.md]] for data.');
+	await expect(editorContent(page).locator('.cm-wikilink').first()).toBeVisible();
+	await editorContent(page)
+		.locator('.cm-wikilink')
+		.first()
+		.click({ modifiers: ['ControlOrMeta'] });
+	await expect(page.getByRole('tab', { name: /appendix\.md/ })).toBeVisible();
+	await expect(page.getByText('2 files')).toBeVisible();
 });
 
 test('workspace: sources and chats', async ({ page }) => {

@@ -6,3 +6,4 @@ site/
 .env
 test-results/
 playwright-report/
+e2e/seed-cache/

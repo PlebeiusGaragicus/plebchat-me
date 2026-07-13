@@ -99,23 +99,26 @@
 								<MessageSquare class="size-3" />
 								{chat.threadCountFor(anno.id) || ''}
 							</button>
-							<button
-								data-testid="annotation-share-toggle"
-								class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs {anno.shared
-									? 'text-emerald-500'
-									: 'hidden text-muted-foreground group-hover:flex hover:text-foreground'}"
-								title={anno.shared ? 'Public — click to make private' : 'Share publicly'}
-								onclick={() => {
-									if (anno.shared) void annotations.setShared(anno.id, false);
-									else {
-										exportHighlight = false;
-										sharingId = anno.id;
-									}
-								}}
-							>
-								<Globe class="size-3" />
-								{anno.shared ? 'Public' : 'Share'}
-							</button>
+							{#if !reader.book?.localOnly}
+								<!-- Sync never pushes a local-only book's annotations — no share. -->
+								<button
+									data-testid="annotation-share-toggle"
+									class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs {anno.shared
+										? 'text-emerald-500'
+										: 'hidden text-muted-foreground group-hover:flex hover:text-foreground'}"
+									title={anno.shared ? 'Public — click to make private' : 'Share publicly'}
+									onclick={() => {
+										if (anno.shared) void annotations.setShared(anno.id, false);
+										else {
+											exportHighlight = false;
+											sharingId = anno.id;
+										}
+									}}
+								>
+									<Globe class="size-3" />
+									{anno.shared ? 'Public' : 'Share'}
+								</button>
+							{/if}
 						</div>
 					{/if}
 				</div>

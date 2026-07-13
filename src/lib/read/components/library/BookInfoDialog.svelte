@@ -183,15 +183,23 @@
 			<h3 class="mb-1 text-sm font-medium">Sync</h3>
 			<dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
 				<dt class="text-muted-foreground">Metadata</dt>
-				<dd class={synced ? 'text-emerald-500' : 'text-primary'}>
-					{synced ? 'Synced to relays' : 'Changed since last sync'}
+				<dd class={book.localOnly ? 'text-muted-foreground' : synced ? 'text-emerald-500' : 'text-primary'}>
+					{book.localOnly
+						? 'Local only — excluded from sync (change in Edit metadata)'
+						: synced
+							? 'Synced to relays'
+							: 'Changed since last sync'}
 				</dd>
 				<dt class="text-muted-foreground">Last sync</dt>
 				<dd>{sync.lastSynced ? formatDate(sync.lastSynced) : 'Never (this session)'}</dd>
 			</dl>
 
 			<h3 class="mb-1 text-sm font-medium">Public shelf</h3>
-			{#if confirmingShare}
+			{#if book.localOnly}
+				<p class="mb-4 text-sm text-muted-foreground">
+					Local-only books can't be shared — they're excluded from sync.
+				</p>
+			{:else if confirmingShare}
 				<div class="mb-4 rounded-lg bg-muted p-3">
 					<p class="mb-2 text-xs">
 						Put this book on your <strong>public shelf</strong>? Its title, author, and description

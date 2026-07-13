@@ -158,10 +158,24 @@ test.describe('logged in', () => {
 		await expect(page.getByTestId('book-edit-dialog')).toBeVisible();
 		await page.fill('[data-testid="edit-title"]', 'Renamed Fixture');
 		await page.fill('[data-testid="edit-creator"]', 'New Author');
+		await page.click('[data-testid="edit-local-only"]');
 		await page.click('[data-testid="edit-save"]');
 		await expect(page.getByTestId('book-edit-dialog')).toHaveCount(0);
 		await expect(page.getByTestId('book-card')).toContainText('Renamed Fixture');
 		await expect(page.getByTestId('book-card')).toContainText('New Author');
+
+		// The local-only choice persists and surfaces in the info dialog.
+		await page.hover('[data-testid="book-card"]');
+		await page.click('[data-testid="book-card"] button[title="Book actions"]');
+		await page.getByRole('menuitem', { name: 'Edit metadata' }).click();
+		await expect(
+			page.locator('[data-testid="edit-local-only"] input[type="radio"]')
+		).toBeChecked();
+		await page.locator('[data-testid="book-edit-dialog"] button[title="Close"]').click();
+		await page.hover('[data-testid="book-card"]');
+		await page.click('[data-testid="book-card"] button[title="Book actions"]');
+		await page.getByRole('menuitem', { name: 'Info' }).click();
+		await expect(page.getByRole('dialog', { name: 'Book info' })).toContainText('Local only');
 	});
 
 	test('sync cloud button opens the status popover', async ({ page }) => {

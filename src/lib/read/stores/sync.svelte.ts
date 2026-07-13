@@ -29,11 +29,13 @@ async function checkDirty(): Promise<void> {
 		db.annotations.getAll(),
 		db.tombstones.getAll()
 	]);
+	// Local-only books never sync, so their changes never count as unsynced.
+	const skip = new Set(books.filter((b) => b.localOnly).map((b) => b.sha256));
 	const newest = Math.max(
 		0,
-		...books.map((b) => b.updatedAt),
-		...progress.map((p) => p.updatedAt),
-		...annotations.map((a) => a.updatedAt),
+		...books.filter((b) => !b.localOnly).map((b) => b.updatedAt),
+		...progress.filter((p) => !skip.has(p.sha256)).map((p) => p.updatedAt),
+		...annotations.filter((a) => !skip.has(a.sha256)).map((a) => a.updatedAt),
 		...tombstones.map((t) => t.deletedAt),
 		settingsStore.settings.readingUpdatedAt
 	);

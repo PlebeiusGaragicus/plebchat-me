@@ -20,6 +20,10 @@ export interface Book {
 	blossom?: { servers: string[]; coverSha256?: string };
 	/** On the user's public shelf: 30101 published as plaintext (still editable). */
 	shared?: boolean;
+	/** Never leaves this device: the book AND its progress/annotations are
+	 * excluded from sync push/pull. Device-local flag — stripped from 30101
+	 * drafts like lastOpenedAt (it never applies remotely by construction). */
+	localOnly?: boolean;
 	addedAt: number;
 	updatedAt: number;
 	lastOpenedAt?: number;

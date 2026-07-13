@@ -78,6 +78,12 @@ IndexedDB record minus redundant keys.
 }
 ```
 
+Two local `Book` fields never appear in content: `lastOpenedAt` (noise) and
+`localOnly` (the per-book sync opt-out — a local-only book and its
+progress/annotations are excluded from sync push *and* pull entirely, so the
+flag has no remote representation by construction; events pushed before the
+flag was set remain on relays until the book is deleted).
+
 **Shared (public shelf):** same mechanism as shared annotations (design
 rule 4) — the *same* event, same `d`, republished with plaintext content
 plus NIP-73 ISBN tags when known:

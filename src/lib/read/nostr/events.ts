@@ -44,7 +44,7 @@ async function sealed(payload: unknown): Promise<string> {
 export async function bookDraft(book: Book): Promise<AddressableDraft> {
 	const { sha256, ...content } = book;
 	void sha256;
-	const payload = { ...content, lastOpenedAt: undefined };
+	const payload = { ...content, lastOpenedAt: undefined, localOnly: undefined };
 	if (book.shared) {
 		// Public shelf: plaintext + query tags; stays addressable and editable.
 		return {

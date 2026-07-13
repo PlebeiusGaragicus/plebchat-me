@@ -66,6 +66,11 @@ export async function syncNow(relays: string[], callbacks: SyncCallbacks): Promi
 	const progressBySha = new Map(localProgress.map((p) => [p.sha256, p]));
 	const annotationById = new Map(localAnnotations.map((a) => [a.id, a]));
 	const tombstoneByKey = new Map(tombstones.map((t) => [t.key, t]));
+	// Local-only books opt out of sync entirely: nothing about them (or their
+	// progress/annotations) is pushed, and remote state never overwrites them.
+	// Events pushed BEFORE the flag was set stay on relays until deletion.
+	const localOnly = (sha: string | undefined) =>
+		sha !== undefined && (bookBySha.get(sha)?.localOnly ?? false);
 
 	for (const event of remoteEvents) {
 		const parsed = await parseRemote(event as SimpleNostrEvent);
@@ -89,6 +94,7 @@ export async function syncNow(relays: string[], callbacks: SyncCallbacks): Promi
 		switch (parsed.kind) {
 			case KIND_BOOK: {
 				const local = bookBySha.get(parsed.d);
+				if (local?.localOnly) break;
 				if (!local || parsed.updatedAt > local.updatedAt) {
 					const book: Book = { ...parsed.book!, sha256: parsed.d, lastOpenedAt: local?.lastOpenedAt };
 					await db.books.save(book);
@@ -99,6 +105,7 @@ export async function syncNow(relays: string[], callbacks: SyncCallbacks): Promi
 				break;
 			}
 			case KIND_PROGRESS: {
+				if (localOnly(parsed.d)) break;
 				const local = progressBySha.get(parsed.d);
 				if (!local || parsed.updatedAt > local.updatedAt) {
 					const progress: ReadingProgress = { ...parsed.progress!, sha256: parsed.d };
@@ -117,6 +124,7 @@ export async function syncNow(relays: string[], callbacks: SyncCallbacks): Promi
 			}
 			case KIND_ANNOTATION: {
 				const local = annotationById.get(parsed.d);
+				if (localOnly(parsed.annotation?.sha256 ?? local?.sha256)) break;
 				if (!local || parsed.updatedAt > local.updatedAt) {
 					const annotation: Annotation = { ...parsed.annotation!, id: parsed.d };
 					await db.annotations.save(annotation);
@@ -130,9 +138,14 @@ export async function syncNow(relays: string[], callbacks: SyncCallbacks): Promi
 
 	// ---- push ----
 	const drafts: AddressableDraft[] = [];
-	for (const book of bookBySha.values()) drafts.push(await bookDraft(book));
-	for (const progress of progressBySha.values()) drafts.push(await progressDraft(progress));
+	for (const book of bookBySha.values()) {
+		if (!book.localOnly) drafts.push(await bookDraft(book));
+	}
+	for (const progress of progressBySha.values()) {
+		if (!localOnly(progress.sha256)) drafts.push(await progressDraft(progress));
+	}
 	for (const anno of annotationById.values()) {
+		if (localOnly(anno.sha256)) continue;
 		const draft = await annotationDraft(anno);
 		if (anno.shared) draft.tags.push(...isbnTags(bookBySha.get(anno.sha256)));
 		drafts.push(draft);

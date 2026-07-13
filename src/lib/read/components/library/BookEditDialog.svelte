@@ -3,7 +3,7 @@
 	// rest below. Saving bumps updatedAt so the next explicit sync publishes
 	// the change; the cover is device-local (restores re-extract it from the
 	// EPUB bytes, see import.ts).
-	import { Upload, X } from '@lucide/svelte';
+	import { Cloud, Lock, Upload, X } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { db } from '$lib/db/index.js';
 	import { library } from '$lib/read/stores/library.svelte.js';
@@ -21,6 +21,7 @@
 	let language = $state('');
 	let isbn = $state('');
 	let description = $state('');
+	let localOnly = $state(false);
 	let newCover = $state<{ blob: Blob; url: string } | null>(null);
 	let saving = $state(false);
 	let seededSha = '';
@@ -38,6 +39,7 @@
 		language = book.language ?? '';
 		isbn = book.isbn ?? '';
 		description = book.description ?? '';
+		localOnly = book.localOnly ?? false;
 	});
 
 	$effect(() => () => {
@@ -107,6 +109,7 @@
 				language: language.trim() || undefined,
 				isbn: isbn.trim() || undefined,
 				description: description.trim() || undefined,
+				localOnly: localOnly || undefined,
 				updatedAt: Date.now()
 			});
 			if (newCover) {
@@ -114,7 +117,9 @@
 			}
 			await library.refresh();
 			await sync.checkDirty();
-			toast.success('Metadata saved — sync to publish the change');
+			toast.success(
+				localOnly ? 'Saved — this book stays on this device' : 'Saved — sync to publish the change'
+			);
 			close();
 		} catch (err) {
 			console.error(err);
@@ -220,6 +225,53 @@
 					bind:value={description}
 				></textarea>
 			</label>
+
+			<h3 class="mb-1.5 text-xs font-medium text-muted-foreground">Sync</h3>
+			<div class="mb-4 flex flex-col gap-2">
+				<label
+					class="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 {!localOnly
+						? 'border-primary bg-primary/5'
+						: 'border-border hover:bg-accent/50'}"
+				>
+					<input
+						type="radio"
+						class="sr-only"
+						name="book-sync-mode"
+						checked={!localOnly}
+						onchange={() => (localOnly = false)}
+					/>
+					<Cloud class="mt-0.5 size-4 shrink-0 {!localOnly ? 'text-primary' : 'text-muted-foreground'}" />
+					<span class="text-xs">
+						<span class="block font-medium text-foreground">Sync to your relays</span>
+						<span class="text-muted-foreground">
+							Metadata, progress, and annotations follow you across devices (encrypted, unless
+							you share them).
+						</span>
+					</span>
+				</label>
+				<label
+					data-testid="edit-local-only"
+					class="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 {localOnly
+						? 'border-primary bg-primary/5'
+						: 'border-border hover:bg-accent/50'}"
+				>
+					<input
+						type="radio"
+						class="sr-only"
+						name="book-sync-mode"
+						checked={localOnly}
+						onchange={() => (localOnly = true)}
+					/>
+					<Lock class="mt-0.5 size-4 shrink-0 {localOnly ? 'text-primary' : 'text-muted-foreground'}" />
+					<span class="text-xs">
+						<span class="block font-medium text-foreground">Local only</span>
+						<span class="text-muted-foreground">
+							This book, its progress, and its annotations never leave this device. Anything
+							already synced stays on your relays until the book is deleted.
+						</span>
+					</span>
+				</label>
+			</div>
 
 			<div class="flex justify-end gap-2">
 				<button

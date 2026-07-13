@@ -15,12 +15,15 @@ export interface Nip50Event {
 
 export function nip50Search(options: {
 	relay: string;
-	query: string;
+	/** Omit for a plain REQ (e.g. "most recent events of kind X"). */
+	query?: string;
+	/** Hashtag filter (`#t`) — topic feeds on relays without NIP-50. */
+	topics?: string[];
 	kinds?: number[];
 	limit?: number;
 	timeoutMs?: number;
 }): Promise<Nip50Event[]> {
-	const { relay, query, kinds = [1, 30023], limit = 10, timeoutMs = 10_000 } = options;
+	const { relay, query, topics, kinds = [1, 30023], limit = 10, timeoutMs = 10_000 } = options;
 	return new Promise((resolve, reject) => {
 		let ws: WebSocket;
 		try {
@@ -51,7 +54,10 @@ export function nip50Search(options: {
 		const timer = setTimeout(() => finish(), timeoutMs);
 
 		ws.onopen = () => {
-			ws.send(JSON.stringify(['REQ', subId, { kinds, search: query, limit }]));
+			const filter: Record<string, unknown> = { kinds, limit };
+			if (query) filter.search = query;
+			if (topics?.length) filter['#t'] = topics;
+			ws.send(JSON.stringify(['REQ', subId, filter]));
 		};
 		ws.onmessage = (msg) => {
 			try {

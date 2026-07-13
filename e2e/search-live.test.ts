@@ -32,8 +32,10 @@ test('live research roundtrip: real LLM + real tools produce a cited, sourced an
 	await expect(page.locator('[data-testid^="tool-call-"]').first()).toBeVisible({
 		timeout: 240_000
 	});
-	// …which records at least one source…
-	await expect(page.getByTestId('source-card').first()).toBeVisible({ timeout: 240_000 });
+	// …which records at least one source (rail collapsed by default)…
+	await expect(page.getByTestId('sources-count')).toBeVisible({ timeout: 240_000 });
+	await page.click('[data-testid="sources-expand"]');
+	await expect(page.getByTestId('source-card').first()).toBeVisible();
 	// …and the run must end with a non-trivial assistant answer.
 	await expect(page.getByTestId('search-message-assistant').last()).toBeVisible({
 		timeout: 360_000

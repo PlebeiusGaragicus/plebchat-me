@@ -28,7 +28,7 @@ Search is also the cheapest vehicle for the **shared agent runtime** that Synthe
     - `web_search(query, limit?)` — Firecrawl `/v2/search`, returns titles/urls/descriptions, records sources
     - `fetch_page(url)` — Firecrawl `/v2/scrape` → markdown (truncated to a token budget), records the source
     - `nostr_search(query, kinds?, limit?)` — NIP-50 REQ over raw WS, returns matching events (notes, long-form), records `nostr:` sources
-- **UI**: `/search` — thread list + chat with streaming assistant text, inline tool-call cards (name, args, status, result summary), sources panel with citation anchors; settings gate mirroring Read's ChatPanel pitch.
+- **UI (SvelteReader deepresearch shape, reworked 2026-07-13)**: collapsible left thread rail (icon rail ↔ searchable date-grouped history with confirm-delete); hero view — "Research deeply. Get answers." over a rounded input card whose controls row holds the **effort selector** (Quick/Balanced/Thorough, persisted, wired into the agent prompt), Web/Nostr tool toggles, settings gear, round submit — with **Explore Recent Events** below (recent kind-30023 articles from a general relay via `#t` topic pills; card select becomes news-reading mode later); the hero adapts into the chat view once a search starts (assistant bubbles render sanitized **markdown** with clickable `[sN]` citations); collapsible right sources rail (count badge when collapsed) whose cards open a **source detail modal**.
 - **Pay-per-use anticipation**: unchanged — the `// PAYMENTS:` seam. Firecrawl metering would hook the same place as inference metering when a payments backend exists.
 
 ### Reference material
@@ -42,6 +42,8 @@ Search is also the cheapest vehicle for the **shared agent runtime** that Synthe
 ## Open questions
 
 - **More search providers**: Brave / Tavily / self-hosted SearXNG behind a provider picker — deferred; the tool interface is provider-agnostic.
+- **News reading mode**: selecting an Explore-Recent-Events article should open a reading view with chat (SvelteReader's article flow) — designed for, not built; cards toast "coming soon".
+- **Feed relay + quality**: the discover feed reads `wss://relay.damus.io` (hardcoded; the NIP-50 search relay ignores plain REQs) with a one-article-per-author cap against bulk publishers. A configurable feed relay and better spam filtering (WoT?) are open.
 - **Cross-mode sources**: `read_source` pulling sources saved by other modes — deferred to the Synthesize shared-core work.
 - **Nostr sync for threads/sources**: deferred with the same reasoning as Read-mode chats; revisit if research threads prove share-worthy.
 

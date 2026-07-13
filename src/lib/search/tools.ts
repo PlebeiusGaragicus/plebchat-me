@@ -9,6 +9,8 @@ import type { SearchSource } from '$lib/db/types.js';
 import { settingsStore } from '$lib/stores/settings.svelte.js';
 import { firecrawlSearch, firecrawlScrape } from './firecrawl.js';
 import { nip50Search } from './nip50.js';
+import type { SearchCapabilities } from './prompt.js';
+import { searchUi } from './stores/ui.svelte.js';
 
 /** Implemented by the thread store: dedupes by URL, assigns s1/s2/… ids. */
 export interface SourceRecorder {
@@ -122,12 +124,17 @@ const nostrSearchTool = (recorder: SourceRecorder): AgentTool<never> =>
 	}) as AgentTool<never>;
 
 export function buildSearchTools(recorder: SourceRecorder): AgentTool<never>[] {
-	const webEnabled = Boolean(settingsStore.settings.search.firecrawlApiKey);
-	const tools: AgentTool<never>[] = [nostrSearchTool(recorder)];
-	if (webEnabled) tools.unshift(webSearchTool(recorder), fetchPageTool(recorder));
+	const caps = searchCapabilities();
+	const tools: AgentTool<never>[] = [];
+	if (caps.web) tools.push(webSearchTool(recorder), fetchPageTool(recorder));
+	if (caps.nostr) tools.push(nostrSearchTool(recorder));
 	return tools.map(withArgRepair);
 }
 
-export function searchCapabilities(): { web: boolean } {
-	return { web: Boolean(settingsStore.settings.search.firecrawlApiKey) };
+export function searchCapabilities(): SearchCapabilities {
+	return {
+		web: Boolean(settingsStore.settings.search.firecrawlApiKey) && searchUi.webEnabled,
+		nostr: searchUi.nostrEnabled,
+		effort: settingsStore.settings.search.effort
+	};
 }

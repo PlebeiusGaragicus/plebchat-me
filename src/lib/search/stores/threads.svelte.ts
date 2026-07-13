@@ -147,7 +147,6 @@ export const searchThreads = {
 	},
 	init,
 	reset,
-	create,
 	send,
 	remove
 };

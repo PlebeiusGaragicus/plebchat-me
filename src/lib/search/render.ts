@@ -46,17 +46,3 @@ export function isDisplayable(message: AgentMessage): boolean {
 }
 
 export { messageRole };
-
-/** Split text on [sN] citation markers so the UI can link them. */
-export function citeSegments(text: string): { cite: boolean; value: string }[] {
-	const segments: { cite: boolean; value: string }[] = [];
-	const pattern = /\[(s\d+)\]/g;
-	let last = 0;
-	for (const match of text.matchAll(pattern)) {
-		if (match.index! > last) segments.push({ cite: false, value: text.slice(last, match.index) });
-		segments.push({ cite: true, value: match[1] });
-		last = match.index! + match[0].length;
-	}
-	if (last < text.length) segments.push({ cite: false, value: text.slice(last) });
-	return segments;
-}

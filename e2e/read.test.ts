@@ -211,6 +211,15 @@ test.describe('logged in', () => {
 	});
 
 	test('chat panel opens; unconfigured state points at Settings', async ({ page }) => {
+		// Saved settings override the dev .env prefill — force unconfigured so
+		// this test is hermetic whether or not a .env is filled.
+		await page.evaluate(() => {
+			localStorage.setItem(
+				'plebchat-settings',
+				JSON.stringify({ ai: { baseUrl: '', model: '', apiKey: '' } })
+			);
+		});
+		await page.reload();
 		await importFixture(page);
 		await openFirstBook(page, CH1_TEXT);
 		await page.click('[data-testid="chat-toggle"]');

@@ -12,6 +12,7 @@
 		settingsStore.save({
 			ai: { ...aiDraft },
 			search: {
+				...searchDraft,
 				firecrawlApiKey: searchDraft.firecrawlApiKey.trim(),
 				searchRelay: searchDraft.searchRelay.trim() || 'wss://relay.nostr.band'
 			}

@@ -91,6 +91,9 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - Firecrawl (`api.firecrawl.dev`) serves `access-control-allow-origin: *` (verified 2026-07-13) — browser-direct with the user's key, no proxy. Sources are recorded by tool execution (authoritative), never parsed from model prose; `[sN]` markers are presentation.
 - `nostr_search` is a self-contained raw-WS one-shot NIP-50 REQ (default `wss://relay.nostr.band`) — deliberately not via cyphertap/NDK (pool has no search relay). Timeout resolves with partial results instead of failing the tool.
 - Search threads (verbatim pi `AgentMessage[]`) are device-local in `searchThreads` (DB v2), matching Read's chat-thread stance: transcripts stay outside the sync schema.
+- **e2e must seed `localStorage['plebchat-settings']` explicitly** for configured/unconfigured states — saved settings override the dev `.env` prefill, so tests written against a blank env silently break the day a `.env` is filled (bit both the Search and Read suites 2026-07-13). Also: a SvelteReader dev server on 5173 gets picked up by Playwright's `reuseExistingServer` — kill it before running.
+- Assistant bubbles render markdown via `$lib/search/markdown.ts` (marked + DOMPurify, allow-listed tags); `[sN]` markers become `<span data-cite>` pre-parse and are handled by click delegation in MessageList — never regex-replace citations in post-sanitize HTML.
+- The Explore-Recent-Events feed queries a GENERAL relay (`relay.damus.io`, plain kind-30023 REQ + `#t` topics) — `relay.nostr.band` is search-only and never answers plain REQs (verified: no EOSE, 0 events). One-article-per-author cap keeps bulk publishers from filling the feed.
 
 ## Working agreements
 

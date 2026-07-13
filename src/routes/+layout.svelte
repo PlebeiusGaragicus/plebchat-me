@@ -7,11 +7,21 @@
 	import { ModeWatcher, mode } from 'mode-watcher';
 	import { Toaster } from 'svelte-sonner';
 	import { cyphertap } from 'cyphertap';
+	import { page } from '$app/state';
 	import TopBar from '$lib/components/TopBar.svelte';
+	import { MODES, modeStore } from '$lib/stores/mode.svelte';
 	import { session } from '$lib/session/index.svelte';
 	import { shell } from '$lib/stores/shell.svelte';
 
 	let { children } = $props();
+
+	// Landing on a mode route directly (deep link, reload) selects that mode —
+	// otherwise the TopBar selector keeps showing the previously stored one.
+	$effect(() => {
+		const routeId = page.route.id;
+		const mode = MODES.find((m) => routeId === m.route || routeId?.startsWith(`${m.route}/`));
+		if (mode && mode.id !== modeStore.current) modeStore.setMode(mode.id);
+	});
 
 	// Bridge cyphertap's identity to the session (and per-npub DB) lifecycle —
 	// here, not in a mode page, so the DB is open regardless of route.

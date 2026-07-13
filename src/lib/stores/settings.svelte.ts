@@ -35,12 +35,16 @@ export interface AiSettings {
 	api: AiApiFlavor;
 }
 
+/** How aggressively the research agent searches (wired into its prompt). */
+export type SearchEffort = 'quick' | 'balanced' | 'thorough';
+
 /** Search-mode tool credentials — like the AI config, this browser only. */
 export interface SearchSettings {
 	/** Gates the web_search/fetch_page tools; absent key = nostr_search only. */
 	firecrawlApiKey: string;
 	/** NIP-50 search relay queried by the nostr_search tool. */
 	searchRelay: string;
+	effort: SearchEffort;
 }
 
 export interface Settings {
@@ -68,7 +72,8 @@ function envDefaults(): Settings {
 		},
 		search: {
 			firecrawlApiKey: import.meta.env.VITE_FIRECRAWL_API_KEY ?? '',
-			searchRelay: 'wss://relay.nostr.band'
+			searchRelay: 'wss://relay.nostr.band',
+			effort: 'balanced'
 		},
 		reading: { fontSize: 18, fontFamily: '', lineHeight: 1.6, theme: 'light' },
 		readingUpdatedAt: 0,

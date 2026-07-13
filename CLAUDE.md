@@ -4,6 +4,12 @@ Greenfield build of **PlebChat** — a client-only, nostr-native web app with fo
 
 This file is primarily a **map of the reference repos** that define what we're building. Read the relevant reference before designing or implementing a feature — don't work from memory.
 
+## Project status & deployment target
+
+- **Pre-release, zero users.** Breaking changes are *encouraged* over backwards-compatibility. Do not write data migrations, versioned upgrade paths, or compatibility shims — change the shape and let old local data (and old relay events) die. IndexedDB version bumps are fine as mechanics for adding stores, but never carry upgrade logic. This stance flips only at first release.
+- **Eventual home**: this repo moves to `github.com/PlebeiusGaragicus/plebeiusgaragicus.github.io` and is served at the **root** of `plebchat.me` (user Pages site, no `BASE_PATH` subpath). Don't invest in subpath-hosting correctness beyond what CI needs today.
+- **The sibling apps are deprecated.** `plebchat.me/vibereader`, socratic-seminar, etc. are read-only proof-of-concept references scheduled to be pulled offline. Do **not** design for coexistence with them — no shared-origin considerations, no cross-app localStorage/IndexedDB namespacing courtesy, no playing nice with their event data. PlebChat absorbs their ideas; it does not live alongside them.
+
 Also relevant: `/Users/satoshi/Downloads/nostr-repos/CLAUDE.md` is the protocol reference library (NIPs, NUTs, Blossom specs, and best-in-class nostr/cashu implementations). Start there for any *protocol* question; start below for any *product/UI* question.
 
 ## Reference repo map
@@ -52,8 +58,8 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - **Status caveat**: local-first only — nostr is identity-only there today; no event kinds defined yet for projects/artifacts/threads (open question: NIP-78 kind 30078 vs custom addressable kinds).
 - **Philosophy (binding)**: `docs/PHILOSOPHY.md` — the six-principle "nostr-ecosystem app" contract (web-first/no backend, relays as filesystem, browser as local-first primary store, keypair-only identity, bitcoin-only payments, sovereign in-browser AI). Principles win over features; edit the doc first to change one.
 
-### Default relay (2026-project homelab)
-`wss://relay.abvstudio.net` — strfry 1.0.4 in Docker on the Mac Mini, Caddy TLS on the VPS.
+### Default relay (2026-project homelab) — temporary
+`wss://relay.abvstudio.net` — strfry 1.0.4 in Docker on the Mac Mini, Caddy TLS on the VPS. **This homelab relay is a stopgap.** The plan is a dedicated VPS for this project running our own relay *and* Blossom server (there is no Blossom server today), both treated as **application-specific infrastructure** — serving only PlebChat, not the open network. The design thinking already exists in `vibereader/proposals.md`: proposal #1 (application-specific relay: proxy Origin allowlist as hygiene + strfry write-policy kind/pubkey allowlist as the real boundary, NIP-42 reads deferred) and proposal #4 (self-hosted `blossom-server` deployment sketch — hzrd149's canonical implementation, MIME-rule allowlist, `requirePubkeyInRule`). Adapt those to PlebChat's event kinds when the VPS happens; architect the app so relay/Blossom URLs stay swappable settings, not constants.
 - Key files: `MAC_MINI/strfry/strfry.conf`, `docker-compose.yml`, `plugins/whitelist.sh`, `purge-old-events.sh`; `VPS_SERVER/Caddy/Caddyfile` (relay block ~line 171); authoritative docs: `docs/strfry.md`.
 - **Constraints to design around**: writes are **pubkey-whitelisted** (runtime lists in host `~/.strfry/whitelist.d/*.txt`; hex pubkeys, effective immediately) — a freshly generated key will be rejected by design; use the pre-whitelisted test accounts (gitignored `.test-accounts.json` in nostr-ecash-ecosystem root). The test accounts carry demo data (kind 0 profiles, mutual kind 3 follows, one shared + Blossom-backed public-domain book with shared annotations each) — reseed with `scripts/seed-test-profiles.sh` + `SEED=1 npx playwright test e2e/seed-friends.test.ts` after the 60-day purge eats it. Kind 1059 gift wraps are always accepted. Reads are open; no NIP-42. Ingest rejects events older than 3 days; cron purges >60 days — **not durable storage**. No blossom server in the homelab yet (known gap).
 

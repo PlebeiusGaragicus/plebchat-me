@@ -4,15 +4,17 @@
 // to /read after login), the registry fires `start` immediately.
 
 import { registerSessionHooks } from '$lib/session/index.svelte';
+import { offerVibereaderMigration } from './migrate.js';
 import { library } from './stores/library.svelte.js';
 import { reader } from './stores/reader.svelte.js';
 import { sync } from './stores/sync.svelte.js';
 import { ui } from './stores/ui.svelte.js';
 
 registerSessionHooks({
-	start: async () => {
+	start: async (npub) => {
 		await library.init();
 		await sync.checkDirty();
+		await offerVibereaderMigration(npub).catch(() => {});
 	},
 	stop: () => {
 		if (reader.book) reader.close();

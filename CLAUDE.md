@@ -73,6 +73,13 @@ Same scaffold as ours (SvelteKit 2/Svelte 5/Tailwind 4, static adapter, cypherta
 - Blob stores (`bookFiles`, `covers`) use **raw put** — the JSON `clone()` used for `$state`-stripping destroys Blobs.
 - Reading theme (light/dark/sepia inside the book iframe, `rendition.themes`) is independent of app chrome theme (mode-watcher). Don't couple them.
 - The `?book=` deep-link mirror in `/read/+page.svelte` must stay gated on `handledInitialUrl` — the mount-time mirror otherwise erases the param before it's read.
+- **Blossom auth is STANDARD base64**, not the BUD-11 spec's base64url — deployed servers (nostr.download, nak) reject the url-safe form. `$lib/nostr/blossom.ts` follows the ecosystem.
+- Most public Blossom servers are useless for EPUBs: primal/v0l block browser CORS on /upload; band/nostrcheck/f7z reject `application/epub+zip`. nostr.download is the only working public default (verified 2026-07); self-hosting is the recommended path.
+- The BUD-06 upload preflight is advisory — only an explicit 413 blocks an upload (nostr.download 400s the HEAD but accepts the PUT).
+- cyphertap's `publishEvent` can surface an async `NDKPublishError` ("0 published, 1 required") as an unhandled rejection when a pool relay rejects — benign: the event lands in cyphertap's unpublished-events cache and retries.
+- All relay/Blossom use is behind **explicit user actions** — no background sync, no timers. LWW merges by content `updatedAt` (never relay `created_at`); tombstones prevent resurrection.
+- Multi-tab is out of scope for v1: two tabs on one DB can clobber progress/annotations last-write-wins.
+- Toasts live bottom-right: top-right stacks sit exactly over mode toolbars and intercept clicks while visible (found via the sync gate — sonner also pauses dismiss timers in backgrounded tabs).
 
 ## Working agreements
 

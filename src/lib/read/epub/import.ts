@@ -4,11 +4,7 @@
 import ePub from 'epubjs';
 import { db } from '$lib/db/index.js';
 import type { Book } from '$lib/db/types.js';
-
-export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-	const digest = await crypto.subtle.digest('SHA-256', buffer);
-	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
+import { sha256Hex } from '$lib/utils.js';
 
 export class DuplicateBookError extends Error {
 	constructor(public existing: Book) {

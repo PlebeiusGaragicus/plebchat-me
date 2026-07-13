@@ -26,11 +26,13 @@
      shared state with cyphertap's widget (same module instance under pnpm),
      so its Dark Mode toggle drives the whole app. -->
 <ModeWatcher defaultMode="dark" />
+<!-- Bottom-right: top-right toasts sit exactly over mode toolbars (Sync,
+     Import…) and intercept clicks while visible. -->
 <Toaster
 	richColors
-	position="top-right"
-	offset={{ top: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}
-	mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
+	position="bottom-right"
+	offset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}
+	mobileOffset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
 	theme={mode.current === 'dark' ? 'dark' : 'light'}
 />
 

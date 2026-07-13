@@ -1,10 +1,12 @@
 <script lang="ts">
-	// PORT NOTE (Phase 2): the per-annotation Share toggle returns in Phase 5;
-	// the "Other readers" (foreign highlights) section returns in Phase 6.
-	import { StickyNote } from '@lucide/svelte';
+	// PORT NOTE: the "Other readers" (foreign highlights) section returns in Phase 6.
+	import { Globe, StickyNote } from '@lucide/svelte';
 	import { HIGHLIGHT_COLORS } from '$lib/read/epub/service.js';
 	import { annotations } from '$lib/read/stores/annotations.svelte.js';
 	import { selection } from '$lib/read/stores/selection.svelte.js';
+
+	let sharingId = $state<string | null>(null);
+	let exportHighlight = $state(false);
 </script>
 
 <aside
@@ -50,6 +52,54 @@
 							</div>
 						</div>
 					</button>
+
+					{#if sharingId === anno.id}
+						<div class="mt-2 rounded-lg bg-muted p-2 text-xs">
+							<p class="mb-1.5">
+								Publish this annotation <strong>in plaintext</strong> to your relays? It stays
+								editable, and you can make it private again later.
+							</p>
+							<label class="mb-2 flex items-center gap-1.5">
+								<input type="checkbox" class="accent-primary" bind:checked={exportHighlight} />
+								Also publish as a NIP-84 highlight (Highlighter-compatible, immutable)
+							</label>
+							<div class="flex gap-2">
+								<button
+									data-testid="annotation-share-confirm"
+									class="rounded bg-primary px-2 py-1 font-medium text-primary-foreground hover:bg-primary/90"
+									onclick={() => {
+										void annotations.setShared(anno.id, true, exportHighlight);
+										sharingId = null;
+									}}
+								>
+									Publish
+								</button>
+								<button class="rounded bg-accent px-2 py-1" onclick={() => (sharingId = null)}>
+									Cancel
+								</button>
+							</div>
+						</div>
+					{:else}
+						<div class="mt-1 flex justify-end">
+							<button
+								data-testid="annotation-share-toggle"
+								class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs {anno.shared
+									? 'text-emerald-500'
+									: 'hidden text-muted-foreground group-hover:flex hover:text-foreground'}"
+								title={anno.shared ? 'Public — click to make private' : 'Share publicly'}
+								onclick={() => {
+									if (anno.shared) void annotations.setShared(anno.id, false);
+									else {
+										exportHighlight = false;
+										sharingId = anno.id;
+									}
+								}}
+							>
+								<Globe class="size-3" />
+								{anno.shared ? 'Public' : 'Share'}
+							</button>
+						</div>
+					{/if}
 				</div>
 			{/each}
 		</div>

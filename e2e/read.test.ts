@@ -227,4 +227,61 @@ test.describe('logged in', () => {
 		await page.click('[data-testid="reader-back"]');
 		await expect(page.locator('header').first()).toBeVisible();
 	});
+
+	test('offers to migrate a vibereader library found on this origin', async ({ page }) => {
+		// Seed a minimal vibereader::<npub> DB for the SAME identity, then
+		// reload so the session-start hook discovers it.
+		await page.evaluate(async () => {
+			const dbs = await indexedDB.databases();
+			const mine = dbs.find((d) => d.name?.startsWith('plebchat::'))!.name!;
+			const oldName = mine.replace('plebchat::', 'vibereader::');
+			await new Promise<void>((resolve, reject) => {
+				const req = indexedDB.open(oldName, 2);
+				req.onupgradeneeded = () => {
+					const db = req.result;
+					db.createObjectStore('books', { keyPath: 'sha256' });
+					db.createObjectStore('bookFiles', { keyPath: 'sha256' });
+					db.createObjectStore('covers', { keyPath: 'sha256' });
+					db.createObjectStore('locations', { keyPath: 'sha256' });
+					db.createObjectStore('progress', { keyPath: 'sha256' });
+					db.createObjectStore('annotations', { keyPath: 'id' });
+					db.createObjectStore('chats', { keyPath: 'id' });
+					db.createObjectStore('kv', { keyPath: 'key' });
+					db.createObjectStore('tombstones', { keyPath: 'key' });
+				};
+				req.onsuccess = () => {
+					const db = req.result;
+					const now = Date.now();
+					const tx = db.transaction(['books', 'bookFiles'], 'readwrite');
+					tx.objectStore('books').put({
+						sha256: 'f'.repeat(64),
+						title: 'Migrated Fixture',
+						creator: 'Old App',
+						fileSize: 3,
+						addedAt: now,
+						updatedAt: now
+					});
+					tx.objectStore('bookFiles').put({
+						sha256: 'f'.repeat(64),
+						blob: new Blob(['old'], { type: 'application/epub+zip' })
+					});
+					tx.oncomplete = () => {
+						db.close();
+						resolve();
+					};
+					tx.onerror = () => reject(tx.error);
+				};
+				req.onerror = () => reject(req.error);
+			});
+		});
+
+		await page.reload();
+		await page.getByRole('button', { name: 'Copy' }).click();
+		await expect(page.getByTestId('book-card')).toContainText('Migrated Fixture');
+
+		// Flag set — no re-offer on the next load.
+		await page.reload();
+		await page.waitForSelector('[data-testid="import-epub"]');
+		await expect(page.getByRole('button', { name: 'Copy' })).not.toBeVisible();
+	});
 });

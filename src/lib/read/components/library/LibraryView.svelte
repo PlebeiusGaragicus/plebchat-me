@@ -1,7 +1,8 @@
 <script lang="ts">
-	// PORT NOTE (Phase 2): Sync and Browse join this toolbar in Phases 5–6.
-	import { BookOpen, Settings } from '@lucide/svelte';
+	// PORT NOTE: Browse joins this toolbar in Phase 6.
+	import { BookOpen, RefreshCw, Settings } from '@lucide/svelte';
 	import { library } from '$lib/read/stores/library.svelte.js';
+	import { sync } from '$lib/read/stores/sync.svelte.js';
 	import { ui } from '$lib/read/stores/ui.svelte.js';
 	import BookCard from './BookCard.svelte';
 	import BookInfoDialog from './BookInfoDialog.svelte';
@@ -32,6 +33,21 @@
 		<h2 class="text-xl font-semibold">Library</h2>
 		<div class="flex items-center gap-2">
 			<ImportButton />
+			<button
+				data-testid="sync-button"
+				class="relative rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+				title="Sync library state with your relays"
+				disabled={sync.syncing}
+				onclick={() => void sync.run()}
+			>
+				<RefreshCw class="size-4 {sync.syncing ? 'animate-spin' : ''}" />
+				{#if sync.dirty}
+					<span
+						data-testid="sync-dirty-dot"
+						class="absolute top-1 right-1 size-1.5 rounded-full bg-primary"
+					></span>
+				{/if}
+			</button>
 			<button
 				data-testid="read-settings-toggle"
 				class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"

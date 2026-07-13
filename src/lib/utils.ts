@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]): string {
 	return twMerge(clsx(inputs));
 }
 
+export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', buffer);
+	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	const units = ['KB', 'MB', 'GB'];

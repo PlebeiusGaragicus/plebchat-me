@@ -1,6 +1,6 @@
 # Proposal: Synthesize Mode
 
-**Status:** In progress · **Last updated:** 2026-07-13
+**Status:** Implemented (local-first v1) · **Last updated:** 2026-07-13
 
 ## Summary
 
@@ -51,4 +51,11 @@ Synthesize is where the other modes converge: sources from Search, annotations f
 - [x] Phase 2: WorkspaceLayout port (sidebar + tabbed panes, drag-to-split, persisted layout, mobile drawer). Interim panes: textarea file editor (CodeMirror is Phase 3), placeholder chat (agent is Phase 4), manual add-source modal. Dropped from the SvelteReader sidebar for now: file tags, thread status filters.
 - [x] Phase 3: CodeMirror editor with live preview + `[[links]]` + versions. Live-content store layer (dirty tracking, debounced flush; versions only by explicit snapshot), version toolbar (prev/next/snapshot), theme-aware livePreview recolored to semantic tokens, Cmd/Ctrl+click wiki-links open-or-create artifacts.
 - [x] Phase 4: Agent integration. `$lib/ai` runner gained the mode-agnostic approval seam (`approvalRequired` + `pendingApproval`/`respond`) and async transcript hydration; workspace tools = list/read/grep/glob/write/patch files (patch approval-gated, reads see live editor content) + list/read sources; per-thread runners persist verbatim transcripts to the `transcripts` store and auto-title threads. ChatPanel shows tool cards, a search/replace approval banner with rejection feedback, and reuses the shared AI settings dialog. Deferred from socratic-seminar: ask_user/choices clarify tools, todos, think.
-- [ ] Phase 5: Playwright e2e (create project, edit artifact, version history, patch approval) + docs
+- [x] Phase 5: Playwright e2e (built alongside each phase: project lifecycle, tabs/persistence, versions, wiki-links, patch approve/reject, unconfigured gate — 8 tests) + `LIVE=1` smoke (real endpoint: patch proposal → approval → edited file, verified green 2026-07-13) + `docs/synthesize.md` user guide.
+
+## Follow-ups (post-v1)
+
+- Nostr sync (shared event-kind decision with Debate).
+- Import a Search thread's sources into a project; agent-driven source scraping (Firecrawl).
+- Sidebar file tags + thread status filters (dropped from the SvelteReader port).
+- Clarify/todos/think tools from socratic-seminar; Debate mode = this core + seminar persona.

@@ -6,6 +6,8 @@
  */
 
 import { browser } from '$app/environment';
+import { BookOpen, Search, FlaskConical, MessagesSquare } from '@lucide/svelte';
+import type { Component } from 'svelte';
 
 const STORAGE_KEY = 'plebchat-mode';
 
@@ -15,7 +17,7 @@ export interface ModeInfo {
 	id: AppMode;
 	name: string;
 	description: string;
-	icon: string; // Lucide icon name, resolved in ModeSelector
+	icon: Component<{ class?: string }>;
 	// Literal route union so resolve(mode.route) type-checks against the route manifest
 	route: `/${AppMode}`;
 }
@@ -25,28 +27,28 @@ export const MODES: ModeInfo[] = [
 		id: 'read',
 		name: 'Read',
 		description: 'Read and annotate books and documents',
-		icon: 'BookOpen',
+		icon: BookOpen,
 		route: '/read'
 	},
 	{
 		id: 'search',
 		name: 'Search',
 		description: 'Agentic research with cited answers',
-		icon: 'Search',
+		icon: Search,
 		route: '/search'
 	},
 	{
 		id: 'synthesize',
 		name: 'Synthesize',
 		description: 'Knowledge synthesis and document creation',
-		icon: 'FlaskConical',
+		icon: FlaskConical,
 		route: '/synthesize'
 	},
 	{
 		id: 'debate',
 		name: 'Debate',
 		description: 'Structured Socratic seminars with an agent',
-		icon: 'MessagesSquare',
+		icon: MessagesSquare,
 		route: '/debate'
 	}
 ];

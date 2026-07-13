@@ -1,16 +1,7 @@
 <script lang="ts">
-	import { BookOpen, Search, FlaskConical, MessagesSquare } from '@lucide/svelte';
 	import { modeStore, type AppMode } from '$lib/stores/mode.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { Component } from 'svelte';
-
-	const iconMap: Record<string, Component<{ class?: string }>> = {
-		BookOpen,
-		Search,
-		FlaskConical,
-		MessagesSquare
-	};
 
 	function enterMode(mode: AppMode) {
 		modeStore.setMode(mode);
@@ -27,7 +18,7 @@
 
 	<div class="mt-12 grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
 		{#each modeStore.modes as mode (mode.id)}
-			{@const ModeIcon = iconMap[mode.icon] ?? BookOpen}
+			{@const ModeIcon = mode.icon}
 			<button
 				data-testid="mode-card-{mode.id}"
 				onclick={() => enterMode(mode.id)}

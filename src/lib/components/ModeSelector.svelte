@@ -1,20 +1,12 @@
 <script lang="ts">
 	import { Popover } from 'bits-ui';
-	import { BookOpen, Search, FlaskConical, MessagesSquare, ChevronDown, Check, Sparkles } from '@lucide/svelte';
+	import { ChevronDown, Check, Sparkles } from '@lucide/svelte';
 	import { modeStore, type AppMode } from '$lib/stores/mode.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import type { Component } from 'svelte';
 
 	let open = $state(false);
-
-	const iconMap: Record<string, Component<{ class?: string }>> = {
-		BookOpen,
-		Search,
-		FlaskConical,
-		MessagesSquare
-	};
 
 	const isHomePage = $derived(page.url.pathname === resolve('/'));
 
@@ -24,11 +16,7 @@
 		goto(resolve(modeStore.getModeInfo(mode).route));
 	}
 
-	function getIcon(iconName: string): Component<{ class?: string }> {
-		return iconMap[iconName] ?? BookOpen;
-	}
-
-	const CurrentIcon = $derived(getIcon(modeStore.currentInfo.icon));
+	const CurrentIcon = $derived(modeStore.currentInfo.icon);
 </script>
 
 <Popover.Root bind:open>
@@ -57,7 +45,7 @@
 			</div>
 
 			{#each modeStore.modes as mode (mode.id)}
-				{@const ModeIcon = getIcon(mode.icon)}
+				{@const ModeIcon = mode.icon}
 				{@const isActive = !isHomePage && modeStore.current === mode.id}
 				<button
 					data-testid="mode-option-{mode.id}"

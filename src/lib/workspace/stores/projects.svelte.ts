@@ -86,6 +86,10 @@ export const projects = {
 	artifactCount(id: string): number {
 		return artifactCounts[id] ?? 0;
 	},
+	/** Keeps dashboard card counts live as the artifacts store creates/deletes. */
+	bumpArtifactCount(id: string, delta: number): void {
+		artifactCounts[id] = Math.max(0, (artifactCounts[id] ?? 0) + delta);
+	},
 	init,
 	reset,
 	create,

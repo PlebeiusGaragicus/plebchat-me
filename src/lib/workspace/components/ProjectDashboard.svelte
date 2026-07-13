@@ -2,7 +2,7 @@
 	// Project grid (SvelteReader's ProjectDashboard, restyled to our semantic
 	// tokens): new-project card, project cards with artifact count + recency,
 	// hover delete with confirm. Mode-agnostic — copy comes in via props.
-	import { Clock, FileText, Folder, Plus, Trash2 } from '@lucide/svelte';
+	import { Clock, FileText, Folder, Pencil, Plus, Trash2 } from '@lucide/svelte';
 	import type { Project } from '$lib/db/types.js';
 	import { projects } from '../stores/projects.svelte.js';
 
@@ -17,6 +17,15 @@
 	let newTitle = $state('');
 	let isCreating = $state(false);
 	let toDelete = $state<Project | null>(null);
+	let renamingId = $state<string | null>(null);
+	let renameDraft = $state('');
+
+	async function commitRename() {
+		if (renamingId && renameDraft.trim()) {
+			await projects.rename(renamingId, renameDraft);
+		}
+		renamingId = null;
+	}
 
 	function formatDate(timestamp: number): string {
 		const diffMs = Date.now() - timestamp;
@@ -116,7 +125,24 @@
 					<Folder class="h-5 w-5 text-primary" />
 				</div>
 
-				<h3 class="mb-1 font-semibold">{project.title}</h3>
+				{#if renamingId === project.id}
+					<!-- svelte-ignore a11y_autofocus -->
+					<input
+						type="text"
+						bind:value={renameDraft}
+						onblur={commitRename}
+						onkeydown={(e) => {
+							e.stopPropagation();
+							if (e.key === 'Enter') void commitRename();
+							else if (e.key === 'Escape') renamingId = null;
+						}}
+						onclick={(e) => e.stopPropagation()}
+						class="mb-1 w-full rounded border border-input bg-background px-1 font-semibold focus:border-ring focus:outline-none"
+						autofocus
+					/>
+				{:else}
+					<h3 class="mb-1 font-semibold">{project.title}</h3>
+				{/if}
 
 				<div class="mt-auto flex items-center gap-4 text-sm text-muted-foreground">
 					<span class="flex items-center gap-1">
@@ -130,16 +156,29 @@
 					</span>
 				</div>
 
-				<button
-					aria-label="Delete project"
-					onclick={(e) => {
-						e.stopPropagation();
-						toDelete = project;
-					}}
-					class="absolute top-3 right-3 rounded-lg p-2 text-muted-foreground/60 opacity-0 transition-all group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-				>
-					<Trash2 class="h-4 w-4" />
-				</button>
+				<div class="absolute top-3 right-3 flex opacity-0 transition-all group-hover:opacity-100">
+					<button
+						aria-label="Rename project"
+						onclick={(e) => {
+							e.stopPropagation();
+							renamingId = project.id;
+							renameDraft = project.title;
+						}}
+						class="rounded-lg p-2 text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+					>
+						<Pencil class="h-4 w-4" />
+					</button>
+					<button
+						aria-label="Delete project"
+						onclick={(e) => {
+							e.stopPropagation();
+							toDelete = project;
+						}}
+						class="rounded-lg p-2 text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+					>
+						<Trash2 class="h-4 w-4" />
+					</button>
+				</div>
 			</div>
 		{/each}
 	</div>

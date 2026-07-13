@@ -48,7 +48,7 @@ Synthesize is where the other modes converge: sources from Search, annotations f
 
 - [x] Shared workspace core decision (with Debate) — yes, `$lib/workspace/`
 - [x] Phase 1: IndexedDB schema (DB v3) + projects store + dashboard + `?project=` deep links
-- [ ] Phase 2: WorkspaceLayout port (sidebar + tabbed panes, mobile drawer)
+- [x] Phase 2: WorkspaceLayout port (sidebar + tabbed panes, drag-to-split, persisted layout, mobile drawer). Interim panes: textarea file editor (CodeMirror is Phase 3), placeholder chat (agent is Phase 4), manual add-source modal. Dropped from the SvelteReader sidebar for now: file tags, thread status filters.
 - [ ] Phase 3: CodeMirror editor with live preview + `[[links]]` + versions
 - [ ] Phase 4: Agent integration (file tools with approval gate)
 - [ ] Phase 5: Playwright e2e (create project, edit artifact, version history, patch approval) + docs

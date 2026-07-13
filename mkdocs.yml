@@ -1,0 +1,60 @@
+site_name: PlebChat
+site_description: Read, search, synthesize and debate — a nostr-ecosystem app
+site_url: https://plebeiusgaragicus.github.io/plebchat-me/docs/
+repo_url: https://github.com/PlebeiusGaragicus/plebchat-me
+repo_name: plebchat-me
+
+theme:
+  name: material
+  palette:
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Philosophy: PHILOSOPHY.md
+  - Development: development.md
+  - Proposals:
+      - App Shell & Modes: proposals/app-shell-and-modes.md
+      - Read Mode: proposals/read-mode.md
+      - Search Mode: proposals/search-mode.md
+      - Synthesize Mode: proposals/synthesize-mode.md
+      - Debate Mode: proposals/debate-mode.md

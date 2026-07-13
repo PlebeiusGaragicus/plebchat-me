@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<!-- chat bubble -->
+	<path
+		d="M16 3C8.8 3 3 8 3 14.2c0 3.5 1.9 6.6 4.8 8.6L6.5 28l5.6-2.6c1.2.3 2.6.5 3.9.5 7.2 0 13-5 13-11.7S23.2 3 16 3z"
+		fill="#7c3aed"
+	/>
+	<!-- lightning bolt -->
+	<path d="M17.5 7.5 12 15.5h3.5L14 21.5l5.5-8h-3.5l1.5-6z" fill="#fafafa" />
+</svg>
